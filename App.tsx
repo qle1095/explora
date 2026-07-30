@@ -1,7 +1,16 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  AppState,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import type { NativeSyntheticEvent } from "react-native";
+import { captureRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 import {
   Camera,
   GeoJSONSource,
@@ -23,6 +32,11 @@ import {
   type PlaceNote,
 } from "./src/db";
 import { useTracking } from "./src/useTracking";
+import {
+  isBackgroundTracking,
+  startBackgroundTracking,
+  stopBackgroundTracking,
+} from "./src/backgroundLocation";
 import { reversePlace, type PlaceResult } from "./src/places";
 import { NoteSheet } from "./src/ui/NoteSheet";
 import { PlacesModal } from "./src/ui/PlacesModal";
@@ -37,7 +51,22 @@ export default function App() {
   const [sheetPlace, setSheetPlace] = useState<PlaceResult | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
+  const [auto, setAuto] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
+  const mapWrapRef = useRef<View>(null);
+
+  useEffect(() => {
+    void isBackgroundTracking().then(setAuto);
+  }, []);
+
+  // The background task writes cells straight to SQLite; pick them up
+  // whenever the app returns to the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setCells(new Set(loadCells()));
+    });
+    return () => sub.remove();
+  }, []);
 
   const onCells = useCallback((fresh: string[]) => {
     setCells((prev) => {
@@ -126,6 +155,33 @@ export default function App() {
     });
   };
 
+  const toggleAuto = async () => {
+    if (auto) {
+      await stopBackgroundTracking();
+      setAuto(false);
+    } else {
+      const result = await startBackgroundTracking();
+      if (result === "denied") {
+        Alert.alert(
+          "Always access needed",
+          "Passive exploring needs 'Always' location access so fog can clear with the app closed. You can enable it in Settings.",
+        );
+      } else {
+        setAuto(true);
+      }
+    }
+  };
+
+  const shareMap = async () => {
+    const uri = await captureRef(mapWrapRef, { format: "png", quality: 0.95 });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Share your Explora map",
+      });
+    }
+  };
+
   const toggleTracking = () => {
     if (tracking) {
       stop();
@@ -139,12 +195,13 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <MapView
-        style={styles.map}
-        mapStyle={MAP_STYLE}
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-      >
+      <View ref={mapWrapRef} collapsable={false} style={styles.map}>
+        <MapView
+          style={styles.map}
+          mapStyle={MAP_STYLE}
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+        >
         <Camera
           ref={cameraRef}
           initialViewState={{ center: START_CENTER, zoom: 12.5 }}
@@ -184,21 +241,22 @@ export default function App() {
             }}
           />
         </GeoJSONSource>
-        {puckShape && (
-          <GeoJSONSource id="puck" data={puckShape}>
-            <Layer
-              type="circle"
-              id="puck-dot"
-              paint={{
-                "circle-radius": 7,
-                "circle-color": "#43b8b0",
-                "circle-stroke-width": 3,
-                "circle-stroke-color": "#ffffff",
-              }}
-            />
-          </GeoJSONSource>
-        )}
-      </MapView>
+          {puckShape && (
+            <GeoJSONSource id="puck" data={puckShape}>
+              <Layer
+                type="circle"
+                id="puck-dot"
+                paint={{
+                  "circle-radius": 7,
+                  "circle-color": "#43b8b0",
+                  "circle-stroke-width": 3,
+                  "circle-stroke-color": "#ffffff",
+                }}
+              />
+            </GeoJSONSource>
+          )}
+        </MapView>
+      </View>
 
       <View style={styles.hud} pointerEvents="none">
         <Text style={styles.hudTitle}>EXPLORA</Text>
@@ -227,16 +285,30 @@ export default function App() {
           </Text>
         </Pressable>
         <Pressable
-          style={styles.button}
+          style={[styles.button, auto && styles.buttonActive]}
+          onPress={() => void toggleAuto()}
+        >
+          <Text style={[styles.buttonText, auto && styles.buttonTextActive]}>
+            {auto ? "Auto ✓" : "Auto"}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={() => setPlacesOpen(true)}>
+          <Text style={styles.buttonText}>Places ({notes.length})</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.button, styles.squareButton]}
           onPress={() => {
             setSheetPlace(null);
             setSheetOpen(true);
           }}
         >
-          <Text style={styles.buttonText}>＋ Place</Text>
+          <Text style={styles.buttonText}>＋</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={() => setPlacesOpen(true)}>
-          <Text style={styles.buttonText}>Places ({notes.length})</Text>
+        <Pressable
+          style={[styles.button, styles.squareButton]}
+          onPress={() => void shareMap()}
+        >
+          <Text style={styles.buttonText}>↗</Text>
         </Pressable>
       </View>
 
@@ -306,6 +378,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 13,
   },
+  squareButton: { flex: 0, width: 46 },
   buttonActive: { backgroundColor: "#43b8b0" },
   buttonText: { color: "#e2ecea", fontWeight: "700", fontSize: 14 },
   buttonTextActive: { color: "#0b1417" },

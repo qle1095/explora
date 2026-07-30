@@ -28,9 +28,13 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Explora clears the fog on your map along the places you actually go."
+          "locationWhenInUsePermission": "Explora clears the fog on your map along the places you actually go.",
+          "locationAlwaysAndWhenInUsePermission": "With Always access, Explora keeps clearing your fog passively as you go about your day — even with the app closed.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

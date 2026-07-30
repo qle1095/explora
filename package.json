@@ -6,11 +6,14 @@
     "@maplibre/maplibre-react-native": "^11.3.6",
     "expo": "~57.0.9",
     "expo-location": "~57.0.7",
+    "expo-sharing": "~57.0.8",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.7",
     "h3-js": "^4.5.0",
     "react": "19.2.3",
-    "react-native": "0.86.2"
+    "react-native": "0.86.2",
+    "react-native-view-shot": "5.1.0"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

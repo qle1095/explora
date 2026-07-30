@@ -1,4 +1,6 @@
 import './src/polyfills';
+// Registers the background location task at module load.
+import './src/backgroundLocation';
 
 import { registerRootComponent } from 'expo';
 
