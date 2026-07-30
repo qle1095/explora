@@ -5,6 +5,8 @@
   "dependencies": {
     "@maplibre/maplibre-react-native": "^11.3.6",
     "expo": "~57.0.9",
+    "expo-location": "~57.0.7",
+    "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "h3-js": "^4.5.0",
     "react": "19.2.3",
