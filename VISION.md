@@ -56,6 +56,10 @@ share your places  ←  add notes to places worth keeping
   Private means private: only you, forever, by default.
 - **Public comments** on canonical places are visible to everyone, like
   YouTube comments — the community layer that makes any place page useful.
+- **The verdict is binary: worth going, yes or no.** Every saved place and
+  public comment carries that one-bit answer, and a place page aggregates it
+  ("19 of 22 say worth it"). No star scales — the notes and comments *are*
+  the review; the yes/no is the only score.
 - The collection of saved places is a first-class object, not map decoration:
   browsable, city-scoped, exportable.
 
@@ -84,7 +88,8 @@ share your places  ←  add notes to places worth keeping
 ## What Explora is NOT
 
 - Not a live-location app (no Find-My-Friends, ever).
-- Not a review platform (comments are traveler-to-traveler tips, not stars).
+- Not a star-rating platform. Reviews here are a binary "worth going?" plus
+  a human note — never 1-to-5 scores, averages, or ranking pressure.
 - Not an algorithmic feed competing for attention.
 - Not a check-in app — if the user has to remember to do something, the
   fog has failed.
