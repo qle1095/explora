@@ -5,6 +5,7 @@ import { gridPathCells, latLngToCell } from "h3-js";
 
 import { REVEAL_RES } from "./fog";
 import { saveCells, saveTrail } from "./db";
+import { onDevWalk } from "./devWalk";
 
 /**
  * Foreground tracking is automatic — the fog clears whenever the app is
@@ -21,6 +22,40 @@ export function useTracking(onCells: (cells: string[]) => void) {
   const lastCell = useRef<string | null>(null);
   const startedAt = useRef(0);
   const points = useRef<[number, number][]>([]);
+  const mockActive = useRef(false);
+
+  const handleFix = useCallback(
+    (latitude: number, longitude: number) => {
+      const pt: [number, number] = [longitude, latitude];
+      setPosition(pt);
+      points.current.push(pt);
+      setTrail([...points.current]);
+
+      const cell = latLngToCell(latitude, longitude, REVEAL_RES);
+      const fresh =
+        lastCell.current && lastCell.current !== cell
+          ? gridPathCells(lastCell.current, cell)
+          : lastCell.current === cell
+            ? []
+            : [cell];
+      lastCell.current = cell;
+      if (fresh.length) {
+        saveCells(fresh);
+        onCells(fresh);
+      }
+    },
+    [onCells],
+  );
+
+  // Dev D-pad walks through the same path as real GPS; once used, real
+  // fixes are ignored for the session so the two sources don't fight.
+  useEffect(() => {
+    if (!__DEV__) return;
+    return onDevWalk((lat, lng) => {
+      mockActive.current = true;
+      handleFix(lat, lng);
+    });
+  }, [handleFix]);
 
   const end = useCallback(() => {
     sub.current?.remove();
@@ -50,24 +85,8 @@ export function useTracking(onCells: (cells: string[]) => void) {
         timeInterval: 2000,
       },
       (loc) => {
-        const { latitude, longitude } = loc.coords;
-        const pt: [number, number] = [longitude, latitude];
-        setPosition(pt);
-        points.current.push(pt);
-        setTrail([...points.current]);
-
-        const cell = latLngToCell(latitude, longitude, REVEAL_RES);
-        const fresh =
-          lastCell.current && lastCell.current !== cell
-            ? gridPathCells(lastCell.current, cell)
-            : lastCell.current === cell
-              ? []
-              : [cell];
-        lastCell.current = cell;
-        if (fresh.length) {
-          saveCells(fresh);
-          onCells(fresh);
-        }
+        if (mockActive.current) return;
+        handleFix(loc.coords.latitude, loc.coords.longitude);
       },
     );
   }, [onCells]);

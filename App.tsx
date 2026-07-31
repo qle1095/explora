@@ -48,6 +48,7 @@ import { NoteSheet } from "./src/ui/NoteSheet";
 import { PlacesModal } from "./src/ui/PlacesModal";
 import { StatsModal } from "./src/ui/StatsModal";
 import { Onboarding } from "./src/ui/Onboarding";
+import { DevPad } from "./src/ui/DevPad";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const START_CENTER: [number, number] = [-122.4193, 37.7893];
@@ -400,6 +401,7 @@ export default function App() {
         notes={notes}
         onClose={() => setStatsOpen(false)}
       />
+      {__DEV__ && <DevPad origin={position} />}
       {!onboarded && <Onboarding onDone={() => void finishOnboarding()} />}
       <StatusBar style="light" />
     </View>
