@@ -18,6 +18,7 @@ import {
   Map as MapView,
   type CameraRef,
   type PressEvent,
+  type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
 import type { Feature, FeatureCollection, Point } from "geojson";
 
@@ -61,6 +62,7 @@ export default function App() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [onboarded, setOnboarded] = useState(() => getKV("onboarded") === "1");
   const [auto, setAuto] = useState(false);
+  const [follow, setFollow] = useState(true);
   const cameraRef = useRef<CameraRef>(null);
   const mapWrapRef = useRef<View>(null);
 
@@ -225,7 +227,22 @@ export default function App() {
     }
   };
 
+  // Camera follows the puck (Google-Maps style) until the user pans away;
+  // the ⌖ button re-engages it.
+  useEffect(() => {
+    if (follow && position) {
+      cameraRef.current?.easeTo({ center: position, duration: 600 });
+    }
+  }, [follow, position]);
+
+  const handleRegionWillChange = (
+    event: NativeSyntheticEvent<ViewStateChangeEvent>,
+  ) => {
+    if (event.nativeEvent.userInteraction) setFollow(false);
+  };
+
   const recenter = () => {
+    setFollow(true);
     if (position) {
       cameraRef.current?.easeTo({ center: position, zoom: 15, duration: 600 });
     } else {
@@ -241,6 +258,7 @@ export default function App() {
           mapStyle={MAP_STYLE}
           onPress={handlePress}
           onLongPress={handleLongPress}
+          onRegionWillChange={handleRegionWillChange}
         >
         <Camera
           ref={cameraRef}
@@ -318,10 +336,12 @@ export default function App() {
 
       <View style={styles.controls}>
         <Pressable
-          style={[styles.button, styles.squareButton]}
+          style={[styles.button, styles.squareButton, follow && styles.buttonActive]}
           onPress={recenter}
         >
-          <Text style={styles.buttonText}>⌖</Text>
+          <Text style={[styles.buttonText, follow && styles.buttonTextActive]}>
+            ⌖
+          </Text>
         </Pressable>
         <Pressable
           style={[styles.button, auto && styles.buttonActive]}
