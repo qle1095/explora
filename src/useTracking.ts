@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import * as Location from "expo-location";
 import { gridPathCells, latLngToCell } from "h3-js";
 
@@ -6,12 +7,12 @@ import { REVEAL_RES } from "./fog";
 import { saveCells, saveTrail } from "./db";
 
 /**
- * Foreground "explorer mode": continuous GPS watch while the app is open.
- * Every fix reveals the cells along the path since the last fix and is
- * persisted immediately; the raw trail is saved when tracking stops.
+ * Foreground tracking is automatic — the fog clears whenever the app is
+ * open, no button. High-accuracy GPS runs while the app is active and
+ * stops the moment it goes to background (where the passive visit task
+ * takes over). Each foreground session's trail is saved on exit.
  */
 export function useTracking(onCells: (cells: string[]) => void) {
-  const [tracking, setTracking] = useState(false);
   const [denied, setDenied] = useState(false);
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [trail, setTrail] = useState<[number, number][]>([]);
@@ -21,7 +22,7 @@ export function useTracking(onCells: (cells: string[]) => void) {
   const startedAt = useRef(0);
   const points = useRef<[number, number][]>([]);
 
-  const stop = useCallback(() => {
+  const end = useCallback(() => {
     sub.current?.remove();
     sub.current = null;
     if (points.current.length > 1) {
@@ -29,11 +30,11 @@ export function useTracking(onCells: (cells: string[]) => void) {
     }
     points.current = [];
     lastCell.current = null;
-    setTracking(false);
   }, []);
 
-  const start = useCallback(async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+  const begin = useCallback(async () => {
+    if (sub.current) return;
+    const { status } = await Location.getForegroundPermissionsAsync();
     if (status !== "granted") {
       setDenied(true);
       return;
@@ -69,15 +70,20 @@ export function useTracking(onCells: (cells: string[]) => void) {
         }
       },
     );
-    setTracking(true);
   }, [onCells]);
 
-  useEffect(
-    () => () => {
-      sub.current?.remove();
-    },
-    [],
-  );
+  useEffect(() => {
+    void begin();
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") void begin();
+      else if (state === "background") end();
+    });
+    return () => {
+      appState.remove();
+      end();
+    };
+  }, [begin, end]);
 
-  return { tracking, denied, position, trail, start, stop };
+  // retry() re-attempts after a permission grant (e.g. right after onboarding).
+  return { denied, position, trail, retry: begin };
 }

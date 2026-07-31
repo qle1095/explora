@@ -92,7 +92,11 @@ export default function App() {
     setKV("onboarded", "1");
     setOnboarded(true);
     await Location.requestForegroundPermissionsAsync();
+    void retry();
     void centerOnUser();
+    // Passive exploring is the default — the map should fill itself.
+    const result = await startBackgroundTracking();
+    setAuto(result === "on");
   };
 
   // The background task writes cells straight to SQLite; pick them up
@@ -112,8 +116,7 @@ export default function App() {
     });
   }, []);
 
-  const { tracking, denied, position, trail, start, stop } =
-    useTracking(onCells);
+  const { denied, position, trail, retry } = useTracking(onCells);
 
   const fogShape = useMemo(() => buildFogShape(cells), [cells]);
   const stats = useMemo(() => exploredStats(cells), [cells]);
@@ -222,14 +225,11 @@ export default function App() {
     }
   };
 
-  const toggleTracking = () => {
-    if (tracking) {
-      stop();
+  const recenter = () => {
+    if (position) {
+      cameraRef.current?.easeTo({ center: position, zoom: 15, duration: 600 });
     } else {
-      void start();
-      if (position) {
-        cameraRef.current?.easeTo({ center: position, zoom: 15, duration: 600 });
-      }
+      void centerOnUser();
     }
   };
 
@@ -312,22 +312,16 @@ export default function App() {
         <Text style={styles.hudHint}>
           {denied
             ? "location permission denied — enable it in Settings"
-            : tracking
-              ? "exploring — fog clears where you go"
-              : "tap here for stats · long-press map to save a place"}
+            : "fog clears as you go · tap here for stats"}
         </Text>
       </Pressable>
 
       <View style={styles.controls}>
         <Pressable
-          style={[styles.button, tracking && styles.buttonActive]}
-          onPress={toggleTracking}
+          style={[styles.button, styles.squareButton]}
+          onPress={recenter}
         >
-          <Text
-            style={[styles.buttonText, tracking && styles.buttonTextActive]}
-          >
-            {tracking ? "■ Stop" : "▶ Explore"}
-          </Text>
+          <Text style={styles.buttonText}>⌖</Text>
         </Pressable>
         <Pressable
           style={[styles.button, auto && styles.buttonActive]}
