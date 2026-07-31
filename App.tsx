@@ -22,13 +22,18 @@ import {
 import type { Feature, FeatureCollection, Point } from "geojson";
 
 import { buildFogShape, exploredStats, revealAt } from "./src/fog";
+import * as Location from "expo-location";
+
 import {
   addNote,
   deleteNote,
+  exploredDays,
+  getKV,
   listNotes,
   loadCells,
   loadTrails,
   saveCells,
+  setKV,
   type PlaceNote,
 } from "./src/db";
 import { useTracking } from "./src/useTracking";
@@ -40,6 +45,8 @@ import {
 import { reversePlace, type PlaceResult } from "./src/places";
 import { NoteSheet } from "./src/ui/NoteSheet";
 import { PlacesModal } from "./src/ui/PlacesModal";
+import { StatsModal } from "./src/ui/StatsModal";
+import { Onboarding } from "./src/ui/Onboarding";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const START_CENTER: [number, number] = [-122.4193, 37.7893];
@@ -51,6 +58,8 @@ export default function App() {
   const [sheetPlace, setSheetPlace] = useState<PlaceResult | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [onboarded, setOnboarded] = useState(() => getKV("onboarded") === "1");
   const [auto, setAuto] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
   const mapWrapRef = useRef<View>(null);
@@ -58,6 +67,33 @@ export default function App() {
   useEffect(() => {
     void isBackgroundTracking().then(setAuto);
   }, []);
+
+  const centerOnUser = useCallback(async () => {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") return;
+    const fix =
+      (await Location.getLastKnownPositionAsync()) ??
+      (await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      }));
+    if (fix) {
+      cameraRef.current?.jumpTo({
+        center: [fix.coords.longitude, fix.coords.latitude],
+        zoom: 13,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (onboarded) void centerOnUser();
+  }, [onboarded, centerOnUser]);
+
+  const finishOnboarding = async () => {
+    setKV("onboarded", "1");
+    setOnboarded(true);
+    await Location.requestForegroundPermissionsAsync();
+    void centerOnUser();
+  };
 
   // The background task writes cells straight to SQLite; pick them up
   // whenever the app returns to the foreground.
@@ -101,7 +137,7 @@ export default function App() {
       type: "FeatureCollection",
       features: notes.map((n) => ({
         type: "Feature",
-        properties: { name: n.name },
+        properties: { name: n.name, verdict: n.verdict },
         geometry: { type: "Point", coordinates: [n.lng, n.lat] },
       })),
     }),
@@ -139,8 +175,12 @@ export default function App() {
     setSheetPlace(place ?? { name: "Dropped pin", detail: "", lat, lng });
   };
 
-  const handleSaveNote = (place: PlaceResult, body: string) => {
-    addNote(place.name, place.lat, place.lng, body);
+  const handleSaveNote = (
+    place: PlaceResult,
+    body: string,
+    verdict: boolean,
+  ) => {
+    addNote(place.name, place.lat, place.lng, body, verdict);
     setNotes(listNotes());
     setSheetOpen(false);
     setSheetPlace(null);
@@ -235,7 +275,12 @@ export default function App() {
             id="note-pins"
             paint={{
               "circle-radius": 6,
-              "circle-color": "#e0a055",
+              "circle-color": [
+                "case",
+                ["==", ["get", "verdict"], 1],
+                "#e0a055",
+                "#5c7476",
+              ],
               "circle-stroke-width": 2,
               "circle-stroke-color": "#0b1417",
             }}
@@ -258,7 +303,7 @@ export default function App() {
         </MapView>
       </View>
 
-      <View style={styles.hud} pointerEvents="none">
+      <Pressable style={styles.hud} onPress={() => setStatsOpen(true)}>
         <Text style={styles.hudTitle}>EXPLORA</Text>
         <Text style={styles.hudStat}>
           {stats.count.toLocaleString()} cells · {stats.areaKm2.toFixed(1)} km²
@@ -269,9 +314,9 @@ export default function App() {
             ? "location permission denied — enable it in Settings"
             : tracking
               ? "exploring — fog clears where you go"
-              : "tap map to reveal · long-press to save a place"}
+              : "tap here for stats · long-press map to save a place"}
         </Text>
-      </View>
+      </Pressable>
 
       <View style={styles.controls}>
         <Pressable
@@ -332,6 +377,16 @@ export default function App() {
         }}
         onClose={() => setPlacesOpen(false)}
       />
+      <StatsModal
+        visible={statsOpen}
+        cellCount={stats.count}
+        areaKm2={stats.areaKm2}
+        earthPct={stats.earthPct}
+        days={statsOpen ? exploredDays() : []}
+        notes={notes}
+        onClose={() => setStatsOpen(false)}
+      />
+      {!onboarded && <Onboarding onDone={() => void finishOnboarding()} />}
       <StatusBar style="light" />
     </View>
   );

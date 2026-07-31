@@ -43,10 +43,15 @@ export function PlacesModal({
             renderItem={({ item }) => (
               <View style={styles.row}>
                 <Pressable style={styles.rowMain} onPress={() => onSelect(item)}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.body} numberOfLines={2}>
-                    {item.body}
+                  <Text style={styles.name}>
+                    {item.verdict === 1 ? "👍 " : "👎 "}
+                    {item.name}
                   </Text>
+                  {!!item.body && (
+                    <Text style={styles.body} numberOfLines={2}>
+                      {item.body}
+                    </Text>
+                  )}
                 </Pressable>
                 <Pressable
                   style={styles.delete}

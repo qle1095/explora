@@ -6,6 +6,8 @@ export interface PlaceNote {
   lat: number;
   lng: number;
   body: string;
+  /** 1 = worth going, 0 = not worth it. The only score Explora has. */
+  verdict: number;
   created_at: number;
 }
 
@@ -31,7 +33,18 @@ db.execSync(`
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS kv (
+    k TEXT PRIMARY KEY,
+    v TEXT NOT NULL
+  );
 `);
+
+// Migration: verdict column added after M1 databases already existed.
+try {
+  db.execSync("ALTER TABLE notes ADD COLUMN verdict INTEGER NOT NULL DEFAULT 1");
+} catch {
+  // column already exists
+}
 
 export function loadCells(): string[] {
   return db
@@ -72,10 +85,11 @@ export function addNote(
   lat: number,
   lng: number,
   body: string,
+  verdict: boolean,
 ): void {
   db.runSync(
-    "INSERT INTO notes (name, lat, lng, body, created_at) VALUES (?, ?, ?, ?, ?)",
-    [name, lat, lng, body, Date.now()],
+    "INSERT INTO notes (name, lat, lng, body, verdict, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    [name, lat, lng, body, verdict ? 1 : 0, Date.now()],
   );
 }
 
@@ -87,4 +101,28 @@ export function listNotes(): PlaceNote[] {
 
 export function deleteNote(id: number): void {
   db.runSync("DELETE FROM notes WHERE id = ?", [id]);
+}
+
+export function getKV(key: string): string | null {
+  const row = db.getFirstSync<{ v: string }>(
+    "SELECT v FROM kv WHERE k = ?",
+    [key],
+  );
+  return row?.v ?? null;
+}
+
+export function setKV(key: string, value: string): void {
+  db.runSync(
+    "INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+    [key, value],
+  );
+}
+
+/** Distinct local days (YYYY-MM-DD, ascending) on which new fog was cleared. */
+export function exploredDays(): string[] {
+  return db
+    .getAllSync<{ day: string }>(
+      "SELECT DISTINCT date(first_seen / 1000, 'unixepoch', 'localtime') AS day FROM cells ORDER BY day",
+    )
+    .map((r) => r.day);
 }

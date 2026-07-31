@@ -18,7 +18,7 @@ interface Props {
   /** Prefilled place (from long-press reverse geocode); null = search mode. */
   place: PlaceResult | null;
   near?: [number, number];
-  onSave: (place: PlaceResult, body: string) => void;
+  onSave: (place: PlaceResult, body: string, verdict: boolean) => void;
   onClose: () => void;
 }
 
@@ -28,6 +28,7 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [body, setBody] = useState("");
+  const [verdict, setVerdict] = useState(true);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
     setQuery("");
     setResults([]);
     setBody("");
+    setVerdict(true);
   }, [place, visible]);
 
   useEffect(() => {
@@ -100,6 +102,34 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
             {!!selected.detail && (
               <Text style={styles.subtitle}>{selected.detail}</Text>
             )}
+            <View style={styles.verdictRow}>
+              <Pressable
+                style={[styles.verdict, verdict && styles.verdictYes]}
+                onPress={() => setVerdict(true)}
+              >
+                <Text
+                  style={[
+                    styles.verdictText,
+                    verdict && styles.verdictTextActive,
+                  ]}
+                >
+                  👍 Worth going
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.verdict, !verdict && styles.verdictNo]}
+                onPress={() => setVerdict(false)}
+              >
+                <Text
+                  style={[
+                    styles.verdictText,
+                    !verdict && styles.verdictTextActive,
+                  ]}
+                >
+                  👎 Skip it
+                </Text>
+              </Pressable>
+            </View>
             <TextInput
               style={[styles.input, styles.noteInput]}
               placeholder="Private note — why is this place worth remembering?"
@@ -114,9 +144,8 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
                 <Text style={styles.secondaryText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.primary, !body.trim() && styles.disabled]}
-                disabled={!body.trim()}
-                onPress={() => onSave(selected, body.trim())}
+                style={styles.primary}
+                onPress={() => onSave(selected, body.trim(), verdict)}
               >
                 <Text style={styles.primaryText}>Save place</Text>
               </Pressable>
@@ -174,6 +203,19 @@ const styles = StyleSheet.create({
   },
   resultName: { color: "#e2ecea", fontSize: 15, fontWeight: "600" },
   resultDetail: { color: "#92a7a7", fontSize: 12, marginTop: 1 },
+  verdictRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  verdict: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#24393d",
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  verdictYes: { backgroundColor: "#43b8b0", borderColor: "#43b8b0" },
+  verdictNo: { backgroundColor: "#5c4a2f", borderColor: "#8a6b3f" },
+  verdictText: { color: "#92a7a7", fontSize: 14, fontWeight: "600" },
+  verdictTextActive: { color: "#0b1417" },
   row: { flexDirection: "row", gap: 10, marginTop: 16 },
   primary: {
     flex: 1,
