@@ -14,6 +14,7 @@ import * as Sharing from "expo-sharing";
 import {
   Camera,
   GeoJSONSource,
+  Images,
   Layer,
   Map as MapView,
   type CameraRef,
@@ -44,6 +45,7 @@ import {
   listVisitPoints,
   loadCells,
   loadTrails,
+  resetMap,
   saveCells,
   setKV,
   type PlaceNote,
@@ -67,7 +69,7 @@ const START_CENTER: [number, number] = [-122.4193, 37.7893];
 export default function App() {
   const [cells, setCells] = useState(() => new Set(loadCells()));
   const [notes, setNotes] = useState<PlaceNote[]>(() => listNotes());
-  const [pastTrails] = useState(() => loadTrails());
+  const [pastTrails, setPastTrails] = useState(() => loadTrails());
   const [visitPoints, setVisitPoints] = useState<LngLat[]>(() =>
     listVisitPoints(),
   );
@@ -136,7 +138,17 @@ export default function App() {
     });
   }, []);
 
-  const { denied, position, trail, retry } = useTracking(onCells);
+  const { denied, position, trail, retry, clearSession } =
+    useTracking(onCells);
+
+  const handleResetMap = () => {
+    resetMap();
+    setCells(new Set());
+    setVisitPoints([]);
+    setPastTrails([]);
+    clearSession();
+    setStatsOpen(false);
+  };
 
   // Static mask (history) is expensive and rarely changes; the live part
   // (current session trail + vision circle) re-unions every fix.
@@ -144,11 +156,24 @@ export default function App() {
     () => buildRevealMask(pastTrails, visitPoints),
     [pastTrails, visitPoints],
   );
-  const fogShape = useMemo(() => {
-    const livePoints: LngLat[] = thinPoints(trail);
-    if (position) livePoints.push(position);
-    return buildFogShape(unionMasks(baseMask, circlesUnion(livePoints)));
-  }, [baseMask, trail, position]);
+  const rimBaseMask = useMemo(
+    () => buildRevealMask(pastTrails, visitPoints, 0.84),
+    [pastTrails, visitPoints],
+  );
+  const livePoints = useMemo(() => {
+    const pts: LngLat[] = thinPoints(trail);
+    if (position) pts.push(position);
+    return pts;
+  }, [trail, position]);
+  const fogShape = useMemo(
+    () => buildFogShape(unionMasks(baseMask, circlesUnion(livePoints))),
+    [baseMask, livePoints],
+  );
+  const rimShape = useMemo(
+    () =>
+      buildFogShape(unionMasks(rimBaseMask, circlesUnion(livePoints, 0.84))),
+    [rimBaseMask, livePoints],
+  );
   const stats = useMemo(() => exploredStats(cells), [cells]);
 
   const trailShape = useMemo<FeatureCollection>(
@@ -294,14 +319,29 @@ export default function App() {
           ref={cameraRef}
           initialViewState={{ center: START_CENTER, zoom: 12.5 }}
         />
+        <Images
+          images={{
+            clouds: require("./assets/clouds.png"),
+            avatar: require("./assets/avatar.png"),
+          }}
+        />
+        <GeoJSONSource id="fog-rim" data={rimShape}>
+          <Layer
+            type="fill"
+            id="fog-rim-fill"
+            paint={{
+              "fill-color": "#dbe9e6",
+              "fill-opacity": 0.9,
+            }}
+          />
+        </GeoJSONSource>
         <GeoJSONSource id="fog" data={fogShape}>
           <Layer
             type="fill"
             id="fog-fill"
             paint={{
-              "fill-color": "#0b1417",
-              "fill-opacity": 0.86,
-              "fill-outline-color": "#43b8b0",
+              "fill-pattern": "clouds",
+              "fill-opacity": 0.97,
             }}
           />
         </GeoJSONSource>
@@ -337,13 +377,13 @@ export default function App() {
           {puckShape && (
             <GeoJSONSource id="puck" data={puckShape}>
               <Layer
-                type="circle"
-                id="puck-dot"
-                paint={{
-                  "circle-radius": 7,
-                  "circle-color": "#43b8b0",
-                  "circle-stroke-width": 3,
-                  "circle-stroke-color": "#ffffff",
+                type="symbol"
+                id="puck-avatar"
+                layout={{
+                  "icon-image": "avatar",
+                  "icon-size": 0.34,
+                  "icon-allow-overlap": true,
+                  "icon-ignore-placement": true,
                 }}
               />
             </GeoJSONSource>
@@ -428,6 +468,7 @@ export default function App() {
         earthPct={stats.earthPct}
         days={statsOpen ? exploredDays() : []}
         notes={notes}
+        onReset={handleResetMap}
         onClose={() => setStatsOpen(false)}
       />
       {__DEV__ && <DevPad origin={position} />}

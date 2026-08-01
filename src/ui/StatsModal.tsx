@@ -1,4 +1,11 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import type { PlaceNote } from "../db";
 import { computeStreaks, milestones } from "../stats";
@@ -10,6 +17,7 @@ interface Props {
   earthPct: string;
   days: string[];
   notes: PlaceNote[];
+  onReset: () => void;
   onClose: () => void;
 }
 
@@ -20,6 +28,7 @@ export function StatsModal({
   earthPct,
   days,
   notes,
+  onReset,
   onClose,
 }: Props) {
   if (!visible) return null;
@@ -102,6 +111,21 @@ export function StatsModal({
               </View>
             </View>
           ))}
+          <Pressable
+            style={styles.reset}
+            onPress={() =>
+              Alert.alert(
+                "Reset your map?",
+                "All fog, trails, and stats go back to zero. Saved places are kept. This can't be undone.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Reset map", style: "destructive", onPress: onReset },
+                ],
+              )
+            }
+          >
+            <Text style={styles.resetText}>Reset map</Text>
+          </Pressable>
           <View style={{ height: 12 }} />
         </ScrollView>
       </View>
@@ -171,4 +195,13 @@ const styles = StyleSheet.create({
   mLabel: { color: "#e2ecea", fontSize: 14, fontWeight: "600" },
   mLabelPending: { color: "#5c7476" },
   mDetail: { color: "#92a7a7", fontSize: 12 },
+  reset: {
+    marginTop: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(224,120,100,0.5)",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  resetText: { color: "#e08a74", fontSize: 14, fontWeight: "700" },
 });

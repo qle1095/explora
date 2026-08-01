@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { searchPlaces, type PlaceResult } from "../places";
+import { nearbyPlaces, searchPlaces, type PlaceResult } from "../places";
 
 interface Props {
   visible: boolean;
@@ -26,6 +26,7 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
   const [selected, setSelected] = useState<PlaceResult | null>(place);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceResult[]>([]);
+  const [nearby, setNearby] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [body, setBody] = useState("");
   const [verdict, setVerdict] = useState(true);
@@ -38,6 +39,24 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
     setBody("");
     setVerdict(true);
   }, [place, visible]);
+
+  // Checkpoint mode: no prefilled place — immediately look up what's
+  // around the user right now.
+  useEffect(() => {
+    if (!visible || place || !near) return;
+    let cancelled = false;
+    setSearching(true);
+    nearbyPlaces(near[1], near[0])
+      .then((r) => {
+        if (!cancelled) setNearby(r);
+      })
+      .finally(() => {
+        if (!cancelled) setSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, place, near]);
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -70,20 +89,22 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
         <View style={styles.grabber} />
         {!selected ? (
           <>
-            <Text style={styles.title}>Add a place</Text>
+            <Text style={styles.title}>Check in</Text>
             <TextInput
               style={styles.input}
-              placeholder="Search for a place…"
+              placeholder="Search, or type a name to add it yourself…"
               placeholderTextColor="#5c7476"
               value={query}
               onChangeText={setQuery}
-              autoFocus
             />
             {searching && <ActivityIndicator color="#43b8b0" />}
+            {query.trim().length < 3 && nearby.length > 0 && (
+              <Text style={styles.sectionLabel}>NEAR YOU</Text>
+            )}
             <FlatList
-              data={results}
+              data={query.trim().length < 3 ? nearby : results}
               keyboardShouldPersistTaps="handled"
-              keyExtractor={(item) => `${item.lat},${item.lng}`}
+              keyExtractor={(item) => `${item.name}:${item.lat},${item.lng}`}
               style={styles.results}
               renderItem={({ item }) => (
                 <Pressable
@@ -95,6 +116,23 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
                 </Pressable>
               )}
             />
+            {query.trim().length > 0 && near && (
+              <Pressable
+                style={styles.customRow}
+                onPress={() =>
+                  setSelected({
+                    name: query.trim(),
+                    detail: "Custom place — added by you",
+                    lat: near[1],
+                    lng: near[0],
+                  })
+                }
+              >
+                <Text style={styles.customText}>
+                  ＋ Add “{query.trim()}” at my location
+                </Text>
+              </Pressable>
+            )}
           </>
         ) : (
           <>
@@ -196,6 +234,22 @@ const styles = StyleSheet.create({
   },
   noteInput: { minHeight: 90, textAlignVertical: "top" },
   results: { marginTop: 8 },
+  sectionLabel: {
+    color: "#43b8b0",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 2,
+    marginTop: 12,
+  },
+  customRow: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(67,184,176,0.4)",
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  customText: { color: "#43b8b0", fontSize: 14, fontWeight: "600" },
   result: {
     paddingVertical: 10,
     borderBottomWidth: 1,

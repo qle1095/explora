@@ -103,6 +103,13 @@ export function useTracking(onCells: (cells: string[]) => void) {
     };
   }, [begin, end]);
 
+  // Forget the current session's path (used by map reset).
+  const clearSession = useCallback(() => {
+    points.current = position ? [position] : [];
+    lastCell.current = null;
+    setTrail([...points.current]);
+  }, [position]);
+
   // retry() re-attempts after a permission grant (e.g. right after onboarding).
-  return { denied, position, trail, retry: begin };
+  return { denied, position, trail, retry: begin, clearSession };
 }

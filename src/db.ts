@@ -172,6 +172,15 @@ export function listVisitPoints(): LngLat[] {
     .map((r) => [r.lng, r.lat] as LngLat);
 }
 
+/** Wipe all exploration (fog, trails, visits). Saved places survive. */
+export function resetMap(): void {
+  db.withTransactionSync(() => {
+    db.runSync("DELETE FROM cells", []);
+    db.runSync("DELETE FROM trails", []);
+    db.runSync("DELETE FROM visit_points", []);
+  });
+}
+
 export function getKV(key: string): string | null {
   const row = db.getFirstSync<{ v: string }>(
     "SELECT v FROM kv WHERE k = ?",

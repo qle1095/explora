@@ -59,6 +59,65 @@ export async function searchPlaces(
   return rows.map(toResult);
 }
 
+interface OverpassElement {
+  lat?: number;
+  lon?: number;
+  center?: { lat: number; lon: number };
+  tags?: Record<string, string>;
+}
+
+/**
+ * Named POIs within ~250m of a point (Overpass API — keyless, fine for
+ * prototype volumes). The checkpoint flow: "what's around me right now?"
+ */
+export async function nearbyPlaces(
+  lat: number,
+  lng: number,
+): Promise<PlaceResult[]> {
+  const around = `(around:250,${lat},${lng})`;
+  const query = `
+    [out:json][timeout:10];
+    ( nwr${around}[name][amenity];
+      nwr${around}[name][shop];
+      nwr${around}[name][tourism];
+      nwr${around}[name][leisure]; );
+    out center 30;`;
+  const res = await fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    headers: HEADERS,
+    body: `data=${encodeURIComponent(query)}`,
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { elements: OverpassElement[] };
+
+  const seen = new Set<string>();
+  const results: (PlaceResult & { distM: number })[] = [];
+  for (const el of data.elements) {
+    const name = el.tags?.name;
+    const pLat = el.lat ?? el.center?.lat;
+    const pLng = el.lon ?? el.center?.lon;
+    if (!name || pLat == null || pLng == null || seen.has(name)) continue;
+    seen.add(name);
+    const kind =
+      el.tags?.amenity ?? el.tags?.shop ?? el.tags?.tourism ?? el.tags?.leisure ?? "";
+    const distM = Math.hypot(
+      (pLat - lat) * 111_320,
+      (pLng - lng) * 111_320 * Math.cos((lat * Math.PI) / 180),
+    );
+    results.push({
+      name,
+      detail: `${kind.replace(/_/g, " ")} · ${Math.round(distM)}m away`,
+      lat: pLat,
+      lng: pLng,
+      distM,
+    });
+  }
+  return results
+    .sort((a, b) => a.distM - b.distM)
+    .slice(0, 15)
+    .map(({ distM: _d, ...r }) => r);
+}
+
 export async function reversePlace(
   lat: number,
   lng: number,

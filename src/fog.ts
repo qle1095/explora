@@ -42,13 +42,24 @@ export const VISION_RADIUS_M = 130;
 /** A point as [lng, lat] (GeoJSON order). */
 export type LngLat = [number, number];
 
-function circle(lng: number, lat: number, steps = 24): ClipMultiPolygon {
+/**
+ * A puffy "cloud hole": a circle with gentle lobes, phase-seeded from the
+ * position so neighbouring puffs interlock organically instead of
+ * repeating. Their union gives the fog its fluffy Don't-Starve edge.
+ */
+function circle(lng: number, lat: number, scale = 1, steps = 36): ClipMultiPolygon {
   const ring: [number, number][] = [];
-  const dLat = VISION_RADIUS_M / 111_320;
-  const dLng = VISION_RADIUS_M / (111_320 * Math.cos((lat * Math.PI) / 180));
+  const r = VISION_RADIUS_M * scale;
+  const dLat = r / 111_320;
+  const dLng = r / (111_320 * Math.cos((lat * Math.PI) / 180));
+  const phase = (Math.abs(Math.sin(lng * 12.9898 + lat * 78.233)) * 43758.5453) % (2 * Math.PI);
   for (let i = 0; i <= steps; i++) {
     const a = (i / steps) * 2 * Math.PI;
-    ring.push([lng + Math.cos(a) * dLng, lat + Math.sin(a) * dLat]);
+    const lobe = 1 + 0.09 * Math.sin(5 * a + phase) + 0.05 * Math.sin(9 * a + phase * 2);
+    ring.push([
+      lng + Math.cos(a) * dLng * lobe,
+      lat + Math.sin(a) * dLat * lobe,
+    ]);
   }
   return [[ring]];
 }
@@ -72,9 +83,9 @@ export function thinPoints(points: LngLat[], minDistM = 50): LngLat[] {
 }
 
 /** Union vision circles at every point (chunked to keep unions shallow). */
-export function circlesUnion(points: LngLat[]): ClipMultiPolygon {
+export function circlesUnion(points: LngLat[], scale = 1): ClipMultiPolygon {
   if (points.length === 0) return [];
-  const geoms = points.map(([lng, lat]) => circle(lng, lat));
+  const geoms = points.map(([lng, lat]) => circle(lng, lat, scale));
   let acc = geoms[0];
   for (let i = 1; i < geoms.length; i += 25) {
     acc = polygonClipping.union(acc, ...geoms.slice(i, i + 25));
@@ -85,13 +96,15 @@ export function circlesUnion(points: LngLat[]): ClipMultiPolygon {
 /**
  * The persistent revealed mask: circle sweeps along every recorded trail
  * plus circles at passive visit points. Smooth capsules, no hexagons.
+ * scale < 1 shrinks every puff — used to draw the pale rim band.
  */
 export function buildRevealMask(
   trails: LngLat[][],
   visits: LngLat[],
+  scale = 1,
 ): ClipMultiPolygon {
   const points = [...trails.flatMap((t) => thinPoints(t)), ...visits];
-  return circlesUnion(points);
+  return circlesUnion(points, scale);
 }
 
 export function unionMasks(
