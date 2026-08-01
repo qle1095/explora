@@ -98,7 +98,7 @@ export default function App() {
     if (fix) {
       cameraRef.current?.jumpTo({
         center: [fix.coords.longitude, fix.coords.latitude],
-        zoom: 13,
+        zoom: 16,
       });
     }
   }, []);
@@ -299,7 +299,7 @@ export default function App() {
   const recenter = () => {
     setFollow(true);
     if (position) {
-      cameraRef.current?.easeTo({ center: position, zoom: 15, duration: 600 });
+      cameraRef.current?.easeTo({ center: position, zoom: 16, duration: 600 });
     } else {
       void centerOnUser();
     }
@@ -317,7 +317,7 @@ export default function App() {
         >
         <Camera
           ref={cameraRef}
-          initialViewState={{ center: START_CENTER, zoom: 12.5 }}
+          initialViewState={{ center: START_CENTER, zoom: 16 }}
         />
         <Images
           images={{

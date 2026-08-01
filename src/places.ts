@@ -9,6 +9,8 @@ export interface PlaceResult {
   detail: string;
   lat: number;
   lng: number;
+  /** Distance from the user when listed via nearby lookup. */
+  distM?: number;
 }
 
 const HEADERS = {
@@ -112,10 +114,7 @@ export async function nearbyPlaces(
       distM,
     });
   }
-  return results
-    .sort((a, b) => a.distM - b.distM)
-    .slice(0, 15)
-    .map(({ distM: _d, ...r }) => r);
+  return results.sort((a, b) => (a.distM ?? 0) - (b.distM ?? 0)).slice(0, 15);
 }
 
 export async function reversePlace(

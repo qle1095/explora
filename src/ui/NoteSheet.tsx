@@ -106,15 +106,23 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
               keyboardShouldPersistTaps="handled"
               keyExtractor={(item) => `${item.name}:${item.lat},${item.lng}`}
               style={styles.results}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.result}
-                  onPress={() => setSelected(item)}
-                >
-                  <Text style={styles.resultName}>{item.name}</Text>
-                  <Text style={styles.resultDetail}>{item.detail}</Text>
-                </Pressable>
-              )}
+              renderItem={({ item }) => {
+                const rightHere = item.distM != null && item.distM <= 60;
+                return (
+                  <Pressable
+                    style={[styles.result, rightHere && styles.resultHere]}
+                    onPress={() => setSelected(item)}
+                  >
+                    <Text style={styles.resultName}>
+                      {item.name}
+                      {rightHere && (
+                        <Text style={styles.hereTag}>   RIGHT HERE</Text>
+                      )}
+                    </Text>
+                    <Text style={styles.resultDetail}>{item.detail}</Text>
+                  </Pressable>
+                );
+              }}
             />
             {query.trim().length > 0 && near && (
               <Pressable
@@ -254,6 +262,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#1c2f33",
+  },
+  resultHere: {
+    backgroundColor: "rgba(67,184,176,0.12)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  hereTag: {
+    color: "#43b8b0",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
   resultName: { color: "#e2ecea", fontSize: 15, fontWeight: "600" },
   resultDetail: { color: "#92a7a7", fontSize: 12, marginTop: 1 },
