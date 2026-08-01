@@ -1,4 +1,5 @@
 import { cellsToMultiPolygon, gridDisk, latLngToCell } from "h3-js";
+import polygonClipping, { type MultiPolygon as ClipMultiPolygon } from "polygon-clipping";
 import type { Feature, Polygon } from "geojson";
 
 /**
@@ -34,14 +35,39 @@ export function revealAt(
   return next;
 }
 
+/** Live vision radius around the player, meters. Not persisted. */
+export const VISION_RADIUS_M = 130;
+
+/** Merge revealed cells into multipolygon coordinates (memoize per cells). */
+export function mergeCells(cells: Set<string>): ClipMultiPolygon {
+  return cellsToMultiPolygon([...cells], true) as ClipMultiPolygon;
+}
+
+function visionCircle(lat: number, lng: number): ClipMultiPolygon {
+  const ring: [number, number][] = [];
+  const dLat = VISION_RADIUS_M / 111_320;
+  const dLng = VISION_RADIUS_M / (111_320 * Math.cos((lat * Math.PI) / 180));
+  for (let i = 0; i <= 48; i++) {
+    const a = (i / 48) * 2 * Math.PI;
+    ring.push([lng + Math.cos(a) * dLng, lat + Math.sin(a) * dLat]);
+  }
+  return [[ring]];
+}
+
 /**
- * Build the fog polygon: world-covering ring with the union of revealed
- * cells punched out as holes. cellsToMultiPolygon merges adjacent cells,
- * so each connected explored area becomes a single smooth hole.
+ * Build the fog polygon: world-covering ring with holes for everything
+ * currently visible — the permanent revealed area unioned with the live
+ * vision circle around the player, so the circle melts into the map
+ * edges and glides in real time as they move.
  */
-export function buildFogShape(cells: Set<string>): Feature<Polygon> {
-  const merged = cellsToMultiPolygon([...cells], true);
-  const holes = merged.map((polygon) => polygon[0]);
+export function buildFogShape(
+  merged: ClipMultiPolygon,
+  vision: [number, number] | null,
+): Feature<Polygon> {
+  const visible = vision
+    ? polygonClipping.union(merged, visionCircle(vision[1], vision[0]))
+    : merged;
+  const holes = visible.map((polygon) => polygon[0]);
   return {
     type: "Feature",
     properties: {},

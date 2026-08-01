@@ -81,8 +81,8 @@ export function useTracking(onCells: (cells: string[]) => void) {
     sub.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
-        distanceInterval: 10,
-        timeInterval: 2000,
+        distanceInterval: 5,
+        timeInterval: 1000,
       },
       (loc) => {
         if (mockActive.current) return;

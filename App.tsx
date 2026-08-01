@@ -22,7 +22,7 @@ import {
 } from "@maplibre/maplibre-react-native";
 import type { Feature, FeatureCollection, Point } from "geojson";
 
-import { buildFogShape, exploredStats, revealAt } from "./src/fog";
+import { buildFogShape, exploredStats, mergeCells, revealAt } from "./src/fog";
 import * as Location from "expo-location";
 
 import {
@@ -121,7 +121,11 @@ export default function App() {
 
   const { denied, position, trail, retry } = useTracking(onCells);
 
-  const fogShape = useMemo(() => buildFogShape(cells), [cells]);
+  const mergedCells = useMemo(() => mergeCells(cells), [cells]);
+  const fogShape = useMemo(
+    () => buildFogShape(mergedCells, position),
+    [mergedCells, position],
+  );
   const stats = useMemo(() => exploredStats(cells), [cells]);
 
   const trailShape = useMemo<FeatureCollection>(
