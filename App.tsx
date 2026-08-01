@@ -22,15 +22,26 @@ import {
 } from "@maplibre/maplibre-react-native";
 import type { Feature, FeatureCollection, Point } from "geojson";
 
-import { buildFogShape, exploredStats, mergeCells, revealAt } from "./src/fog";
+import {
+  buildFogShape,
+  buildRevealMask,
+  exploredStats,
+  revealAt,
+  thinPoints,
+  unionMasks,
+  circlesUnion,
+  type LngLat,
+} from "./src/fog";
 import * as Location from "expo-location";
 
 import {
   addNote,
+  addVisitPoint,
   deleteNote,
   exploredDays,
   getKV,
   listNotes,
+  listVisitPoints,
   loadCells,
   loadTrails,
   saveCells,
@@ -57,6 +68,9 @@ export default function App() {
   const [cells, setCells] = useState(() => new Set(loadCells()));
   const [notes, setNotes] = useState<PlaceNote[]>(() => listNotes());
   const [pastTrails] = useState(() => loadTrails());
+  const [visitPoints, setVisitPoints] = useState<LngLat[]>(() =>
+    listVisitPoints(),
+  );
   const [sheetPlace, setSheetPlace] = useState<PlaceResult | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
@@ -102,11 +116,14 @@ export default function App() {
     setAuto(result === "on");
   };
 
-  // The background task writes cells straight to SQLite; pick them up
+  // The background task writes straight to SQLite; pick its work up
   // whenever the app returns to the foreground.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") setCells(new Set(loadCells()));
+      if (state === "active") {
+        setCells(new Set(loadCells()));
+        setVisitPoints(listVisitPoints());
+      }
     });
     return () => sub.remove();
   }, []);
@@ -121,11 +138,17 @@ export default function App() {
 
   const { denied, position, trail, retry } = useTracking(onCells);
 
-  const mergedCells = useMemo(() => mergeCells(cells), [cells]);
-  const fogShape = useMemo(
-    () => buildFogShape(mergedCells, position),
-    [mergedCells, position],
+  // Static mask (history) is expensive and rarely changes; the live part
+  // (current session trail + vision circle) re-unions every fix.
+  const baseMask = useMemo(
+    () => buildRevealMask(pastTrails, visitPoints),
+    [pastTrails, visitPoints],
   );
+  const fogShape = useMemo(() => {
+    const livePoints: LngLat[] = thinPoints(trail);
+    if (position) livePoints.push(position);
+    return buildFogShape(unionMasks(baseMask, circlesUnion(livePoints)));
+  }, [baseMask, trail, position]);
   const stats = useMemo(() => exploredStats(cells), [cells]);
 
   const trailShape = useMemo<FeatureCollection>(
@@ -169,6 +192,8 @@ export default function App() {
   // Dev cheat while GPS is off: tap to reveal (persisted like a real visit).
   const handlePress = (event: NativeSyntheticEvent<PressEvent>) => {
     const [lng, lat] = event.nativeEvent.lngLat;
+    addVisitPoint(lat, lng);
+    setVisitPoints((prev) => [...prev, [lng, lat]]);
     setCells((prev) => {
       const next = revealAt(prev, lat, lng);
       const fresh = [...next].filter((c) => !prev.has(c));

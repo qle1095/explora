@@ -3,7 +3,7 @@ import * as TaskManager from "expo-task-manager";
 import { gridDisk, latLngToCell } from "h3-js";
 
 import { REVEAL_RES } from "./fog";
-import { saveCells } from "./db";
+import { addVisitPoint, saveCells } from "./db";
 
 /**
  * Passive "visit mode": battery-cheap background fixes reveal a chunk of
@@ -17,11 +17,10 @@ TaskManager.defineTask(BG_TASK, async ({ data, error }) => {
   const { locations } = data as { locations: Location.LocationObject[] };
   const cells = new Set<string>();
   for (const loc of locations) {
-    const center = latLngToCell(
-      loc.coords.latitude,
-      loc.coords.longitude,
-      REVEAL_RES,
-    );
+    const { latitude, longitude } = loc.coords;
+    // Circle sweep is the visual reveal; cells remain the stats record.
+    addVisitPoint(latitude, longitude);
+    const center = latLngToCell(latitude, longitude, REVEAL_RES);
     for (const c of gridDisk(center, 1)) cells.add(c);
   }
   if (cells.size) saveCells(cells);

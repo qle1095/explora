@@ -11,7 +11,9 @@
   share-map-PNG) are done and verified on the iOS simulator. Auth/Supabase
   sync deliberately deferred — core features first.
 - **Stack**: Expo dev-client (not Expo Go) + @maplibre/maplibre-react-native
-  v11 (new API: Map/GeoJSONSource/Layer) + h3-js (res 10 cells) + expo-sqlite
+  v11 (new API: Map/GeoJSONSource/Layer) + h3-js (res 10 cells) + expo-sqlite.
+  Fog visuals are circle sweeps (polygon-clipping union of 130m vision
+  circles along trails/visits) — H3 cells remain the stats/sync record only.
   + expo-location/expo-task-manager. Tiles: OpenFreeMap `liberty` style.
 - **Gotchas**:
   - CocoaPods needs `LANG=en_US.UTF-8` or it crashes with an encoding error.

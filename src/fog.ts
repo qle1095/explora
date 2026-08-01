@@ -1,4 +1,4 @@
-import { cellsToMultiPolygon, gridDisk, latLngToCell } from "h3-js";
+import { gridDisk, latLngToCell } from "h3-js";
 import polygonClipping, { type MultiPolygon as ClipMultiPolygon } from "polygon-clipping";
 import type { Feature, Polygon } from "geojson";
 
@@ -35,38 +35,79 @@ export function revealAt(
   return next;
 }
 
-/** Live vision radius around the player, meters. Not persisted. */
+/** Vision radius around the player, meters. The sweep of this circle IS
+ * the revealed area — the map keeps a smooth capsule trail of it. */
 export const VISION_RADIUS_M = 130;
 
-/** Merge revealed cells into multipolygon coordinates (memoize per cells). */
-export function mergeCells(cells: Set<string>): ClipMultiPolygon {
-  return cellsToMultiPolygon([...cells], true) as ClipMultiPolygon;
-}
+/** A point as [lng, lat] (GeoJSON order). */
+export type LngLat = [number, number];
 
-function visionCircle(lat: number, lng: number): ClipMultiPolygon {
+function circle(lng: number, lat: number, steps = 24): ClipMultiPolygon {
   const ring: [number, number][] = [];
   const dLat = VISION_RADIUS_M / 111_320;
   const dLng = VISION_RADIUS_M / (111_320 * Math.cos((lat * Math.PI) / 180));
-  for (let i = 0; i <= 48; i++) {
-    const a = (i / 48) * 2 * Math.PI;
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * 2 * Math.PI;
     ring.push([lng + Math.cos(a) * dLng, lat + Math.sin(a) * dLat]);
   }
   return [[ring]];
 }
 
+/** Drop points closer than minDistM to the previously kept one. */
+export function thinPoints(points: LngLat[], minDistM = 50): LngLat[] {
+  const kept: LngLat[] = [];
+  for (const p of points) {
+    const last = kept[kept.length - 1];
+    if (
+      !last ||
+      Math.hypot(
+        (p[1] - last[1]) * 111_320,
+        (p[0] - last[0]) * 111_320 * Math.cos((p[1] * Math.PI) / 180),
+      ) >= minDistM
+    ) {
+      kept.push(p);
+    }
+  }
+  return kept;
+}
+
+/** Union vision circles at every point (chunked to keep unions shallow). */
+export function circlesUnion(points: LngLat[]): ClipMultiPolygon {
+  if (points.length === 0) return [];
+  const geoms = points.map(([lng, lat]) => circle(lng, lat));
+  let acc = geoms[0];
+  for (let i = 1; i < geoms.length; i += 25) {
+    acc = polygonClipping.union(acc, ...geoms.slice(i, i + 25));
+  }
+  return acc;
+}
+
 /**
- * Build the fog polygon: world-covering ring with holes for everything
- * currently visible — the permanent revealed area unioned with the live
- * vision circle around the player, so the circle melts into the map
- * edges and glides in real time as they move.
+ * The persistent revealed mask: circle sweeps along every recorded trail
+ * plus circles at passive visit points. Smooth capsules, no hexagons.
  */
-export function buildFogShape(
-  merged: ClipMultiPolygon,
-  vision: [number, number] | null,
-): Feature<Polygon> {
-  const visible = vision
-    ? polygonClipping.union(merged, visionCircle(vision[1], vision[0]))
-    : merged;
+export function buildRevealMask(
+  trails: LngLat[][],
+  visits: LngLat[],
+): ClipMultiPolygon {
+  const points = [...trails.flatMap((t) => thinPoints(t)), ...visits];
+  return circlesUnion(points);
+}
+
+export function unionMasks(
+  a: ClipMultiPolygon,
+  b: ClipMultiPolygon,
+): ClipMultiPolygon {
+  if (a.length === 0) return b;
+  if (b.length === 0) return a;
+  return polygonClipping.union(a, b);
+}
+
+/**
+ * Build the fog polygon: world-covering ring with the visible area
+ * punched out as holes.
+ */
+export function buildFogShape(visible: ClipMultiPolygon): Feature<Polygon> {
   const holes = visible.map((polygon) => polygon[0]);
   return {
     type: "Feature",

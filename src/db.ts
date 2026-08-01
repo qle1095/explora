@@ -1,7 +1,7 @@
 import { openDatabaseSync } from "expo-sqlite";
-import { cellToChildren, getResolution } from "h3-js";
+import { cellToChildren, cellToLatLng, getResolution } from "h3-js";
 
-import { REVEAL_RES } from "./fog";
+import { REVEAL_RES, type LngLat } from "./fog";
 
 export interface PlaceNote {
   id: number;
@@ -40,6 +40,12 @@ db.execSync(`
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS visit_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    created_at INTEGER NOT NULL
+  );
 `);
 
 // Migration: verdict column added after M1 databases already existed.
@@ -47,6 +53,29 @@ try {
   db.execSync("ALTER TABLE notes ADD COLUMN verdict INTEGER NOT NULL DEFAULT 1");
 } catch {
   // column already exists
+}
+
+// Migration: fog rendering moved from hex cells to circle sweeps. Seed
+// visit points from existing cell centers once so old maps stay revealed.
+{
+  const seeded = db.getFirstSync<{ v: string }>(
+    "SELECT v FROM kv WHERE k = 'vp_seeded'",
+  );
+  if (!seeded) {
+    const cells = db.getAllSync<{ h3: string; first_seen: number }>(
+      "SELECT h3, first_seen FROM cells",
+    );
+    db.withTransactionSync(() => {
+      for (const row of cells) {
+        const [lat, lng] = cellToLatLng(row.h3);
+        db.runSync(
+          "INSERT INTO visit_points (lat, lng, created_at) VALUES (?, ?, ?)",
+          [lat, lng, row.first_seen],
+        );
+      }
+      db.runSync("INSERT INTO kv (k, v) VALUES ('vp_seeded', '1')", []);
+    });
+  }
 }
 
 // Migration: the reveal resolution changed (9 → 10). Split any coarser
@@ -126,6 +155,21 @@ export function listNotes(): PlaceNote[] {
 
 export function deleteNote(id: number): void {
   db.runSync("DELETE FROM notes WHERE id = ?", [id]);
+}
+
+export function addVisitPoint(lat: number, lng: number): void {
+  db.runSync(
+    "INSERT INTO visit_points (lat, lng, created_at) VALUES (?, ?, ?)",
+    [lat, lng, Date.now()],
+  );
+}
+
+export function listVisitPoints(): LngLat[] {
+  return db
+    .getAllSync<{ lat: number; lng: number }>(
+      "SELECT lat, lng FROM visit_points ORDER BY id",
+    )
+    .map((r) => [r.lng, r.lat] as LngLat);
 }
 
 export function getKV(key: string): string | null {
