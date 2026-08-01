@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { devWalkTo } from "../devWalk";
 
-const STEP_M = 15;
-const REPEAT_MS = 250;
+const STEP_M = 9;
+const REPEAT_MS = 130;
 
 interface Props {
   /** Where walking starts from the first time a button is pressed. */

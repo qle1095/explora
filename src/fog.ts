@@ -37,7 +37,7 @@ export function revealAt(
 
 /** Vision radius around the player, meters. The sweep of this circle IS
  * the revealed area — the map keeps a smooth capsule trail of it. */
-export const VISION_RADIUS_M = 130;
+export const VISION_RADIUS_M = 75;
 
 /** A point as [lng, lat] (GeoJSON order). */
 export type LngLat = [number, number];
@@ -65,7 +65,7 @@ function circle(lng: number, lat: number, scale = 1, steps = 36): ClipMultiPolyg
 }
 
 /** Drop points closer than minDistM to the previously kept one. */
-export function thinPoints(points: LngLat[], minDistM = 50): LngLat[] {
+export function thinPoints(points: LngLat[], minDistM = 30): LngLat[] {
   const kept: LngLat[] = [];
   for (const p of points) {
     const last = kept[kept.length - 1];
