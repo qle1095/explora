@@ -69,54 +69,46 @@ interface OverpassElement {
 }
 
 /**
- * Category preference for the nearby list — the order travelers care
- * about: attractions first, then food, then essentials, then the rest.
- * Reorder or extend this array to change the sort.
+ * Exclusion list for the nearby check-in list: everyday-errand and
+ * service spots travelers don't check into. Everything else shows,
+ * sorted purely by distance. Edit this set to tune the noise filter.
  */
-const CATEGORY_PREFERENCE: Array<{
-  emoji: string;
-  match: (t: Record<string, string>) => boolean;
-}> = [
-  {
-    emoji: "🏛️",
-    match: (t) =>
-      "tourism" in t ||
-      "historic" in t ||
-      t.leisure === "park" ||
-      t.leisure === "garden" ||
-      t.leisure === "nature_reserve" ||
-      t.amenity === "place_of_worship" ||
-      t.amenity === "theatre" ||
-      t.amenity === "arts_centre",
-  },
-  {
-    emoji: "🍜",
-    match: (t) =>
-      ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "food_court", "biergarten"].includes(
-        t.amenity ?? "",
-      ) || t.shop === "bakery",
-  },
-  {
-    emoji: "🏪",
-    match: (t) =>
-      ["convenience", "supermarket", "mall", "department_store", "kiosk"].includes(
-        t.shop ?? "",
-      ) ||
-      t.amenity === "pharmacy" ||
-      t.amenity === "marketplace",
-  },
-];
+const EXCLUDED_KINDS = new Set([
+  // services & errands
+  "laundry", "dry_cleaning", "atm", "bank", "bureau_de_change",
+  "post_office", "courier", "copyshop", "estate_agent", "insurance",
+  "lawyer", "notary", "employment_agency", "self_storage", "storage_rental",
+  // health & personal care
+  "pharmacy", "dentist", "doctors", "clinic", "hospital", "veterinary",
+  "hairdresser", "beauty", "nails", "massage", "tanning", "optician",
+  // vehicles & infrastructure
+  "fuel", "car_repair", "car_wash", "car", "car_parts", "car_rental",
+  "charging_station", "parking", "bicycle_parking", "driving_school",
+  // misc noise
+  "vending_machine", "toilets", "recycling", "waste_disposal",
+  "tattoo", "cannabis", "e-cigarette", "funeral_directors",
+  "kindergarten", "childcare", "school", "college", "tutoring",
+  "mobile_phone", "hardware", "doityourself", "trade",
+]);
 
-function categoryRank(tags: Record<string, string>): {
-  rank: number;
-  emoji: string;
-} {
-  for (let i = 0; i < CATEGORY_PREFERENCE.length; i++) {
-    if (CATEGORY_PREFERENCE[i].match(tags)) {
-      return { rank: i, emoji: CATEGORY_PREFERENCE[i].emoji };
-    }
-  }
-  return { rank: CATEGORY_PREFERENCE.length, emoji: "📍" };
+function isExcluded(tags: Record<string, string>): boolean {
+  return [tags.amenity, tags.shop, tags.leisure, tags.office].some(
+    (v) => v != null && EXCLUDED_KINDS.has(v),
+  );
+}
+
+/** Category emoji, purely decorative — makes rows scannable. */
+function categoryEmoji(t: Record<string, string>): string {
+  if ("tourism" in t || "historic" in t) return "🏛️";
+  if (
+    ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "food_court", "biergarten"].includes(t.amenity ?? "") ||
+    t.shop === "bakery"
+  )
+    return "🍜";
+  if (["convenience", "supermarket", "mall", "department_store", "kiosk"].includes(t.shop ?? ""))
+    return "🏪";
+  if ("leisure" in t) return "🌳";
+  return "📍";
 }
 
 /**
@@ -145,40 +137,30 @@ export async function nearbyPlaces(
   const data = (await res.json()) as { elements: OverpassElement[] };
 
   const seen = new Set<string>();
-  const results: (PlaceResult & { distM: number; rank: number })[] = [];
+  const results: (PlaceResult & { distM: number })[] = [];
   for (const el of data.elements) {
     const name = el.tags?.name;
     const pLat = el.lat ?? el.center?.lat;
     const pLng = el.lon ?? el.center?.lon;
     if (!name || pLat == null || pLng == null || seen.has(name)) continue;
-    seen.add(name);
     const tags = el.tags ?? {};
+    if (isExcluded(tags)) continue;
+    seen.add(name);
     const kind =
       tags.amenity ?? tags.shop ?? tags.tourism ?? tags.historic ?? tags.leisure ?? "";
-    const { rank, emoji } = categoryRank(tags);
     const distM = Math.hypot(
       (pLat - lat) * 111_320,
       (pLng - lng) * 111_320 * Math.cos((lat * Math.PI) / 180),
     );
     results.push({
       name,
-      detail: `${emoji} ${kind.replace(/_/g, " ")} · ${Math.round(distM)}m away`,
+      detail: `${categoryEmoji(tags)} ${kind.replace(/_/g, " ")} · ${Math.round(distM)}m away`,
       lat: pLat,
       lng: pLng,
       distM,
-      rank,
     });
   }
-  // Right-here places first, then by category preference, then distance.
-  return results
-    .sort((a, b) => {
-      const hereA = a.distM <= 60 ? -1 : a.rank;
-      const hereB = b.distM <= 60 ? -1 : b.rank;
-      if (hereA !== hereB) return hereA - hereB;
-      return a.distM - b.distM;
-    })
-    .slice(0, 20)
-    .map(({ rank: _r, ...r }) => r);
+  return results.sort((a, b) => a.distM - b.distM).slice(0, 20);
 }
 
 export async function reversePlace(
