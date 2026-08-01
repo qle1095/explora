@@ -7,7 +7,7 @@ import { saveCells } from "./db";
 
 /**
  * Passive "visit mode": battery-cheap background fixes reveal a chunk of
- * fog (~1-ring of cells, ≈350m across) around wherever the user dwells.
+ * fog (~1-ring of cells, ≈250m across) around wherever the user dwells.
  * The task must be defined at module load — index.ts imports this file.
  */
 export const BG_TASK = "explora-bg-location";

@@ -2,13 +2,13 @@ import { cellsToMultiPolygon, gridDisk, latLngToCell } from "h3-js";
 import type { Feature, Polygon } from "geojson";
 
 /**
- * H3 resolution 9: cells ~170m across (~0.1 km^2).
+ * H3 resolution 10: cells ~120m across (~0.015 km^2).
  * This is the canonical "revealed" unit for the whole product.
  */
-export const REVEAL_RES = 9;
+export const REVEAL_RES = 10;
 
-/** Rough number of res-9 cells covering Earth's surface, for the stats HUD. */
-const EARTH_CELLS_R9 = 4_842_432_842;
+/** Rough number of res-10 cells covering Earth's surface, for the stats HUD. */
+const EARTH_CELLS = 33_897_029_882;
 
 // Outer ring covering the world (web-mercator safe latitudes).
 // Fog = this polygon, with revealed areas punched out as holes.
@@ -53,10 +53,10 @@ export function buildFogShape(cells: Set<string>): Feature<Polygon> {
 }
 
 export function exploredStats(cells: Set<string>) {
-  const pct = (cells.size / EARTH_CELLS_R9) * 100;
+  const pct = (cells.size / EARTH_CELLS) * 100;
   return {
     count: cells.size,
-    areaKm2: cells.size * 0.105,
+    areaKm2: cells.size * 0.015,
     earthPct: pct < 0.0001 ? "<0.0001" : pct.toFixed(4),
   };
 }

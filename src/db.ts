@@ -1,4 +1,7 @@
 import { openDatabaseSync } from "expo-sqlite";
+import { cellToChildren, getResolution } from "h3-js";
+
+import { REVEAL_RES } from "./fog";
 
 export interface PlaceNote {
   id: number;
@@ -44,6 +47,28 @@ try {
   db.execSync("ALTER TABLE notes ADD COLUMN verdict INTEGER NOT NULL DEFAULT 1");
 } catch {
   // column already exists
+}
+
+// Migration: the reveal resolution changed (9 → 10). Split any coarser
+// stored cells into their children at the current resolution.
+{
+  const rows = db.getAllSync<{ h3: string; first_seen: number }>(
+    "SELECT h3, first_seen FROM cells",
+  );
+  const stale = rows.filter((r) => getResolution(r.h3) < REVEAL_RES);
+  if (stale.length) {
+    db.withTransactionSync(() => {
+      for (const row of stale) {
+        db.runSync("DELETE FROM cells WHERE h3 = ?", [row.h3]);
+        for (const child of cellToChildren(row.h3, REVEAL_RES)) {
+          db.runSync(
+            "INSERT OR IGNORE INTO cells (h3, first_seen) VALUES (?, ?)",
+            [child, row.first_seen],
+          );
+        }
+      }
+    });
+  }
 }
 
 export function loadCells(): string[] {
