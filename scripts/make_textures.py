@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Generate the fog cloud tile and the placeholder profile avatar."""
+"""Generate Explora texture assets.
+
+Default run: only procedural-by-design assets (footprints, road tiles).
+--placeholders: ALSO regenerate placeholder art (clouds, avatar, land
+tiles) — OVERWRITES installed generated art; only for fresh setups.
+"""
+import sys
+
+REGEN_PLACEHOLDERS = "--placeholders" in sys.argv
 import math
 import random
 
@@ -49,7 +57,7 @@ for gx in range(4):
             rng.uniform(28, 56),
         )
 
-img.save(f"{ASSETS}/clouds.png")
+img.save(f"{ASSETS}/clouds.png") if REGEN_PLACEHOLDERS else None
 
 # ---------- placeholder avatar ----------
 A = 128
@@ -73,8 +81,8 @@ for ex in (-30, 30):
 # smile
 d.arc([c - 16, c - 2, c + 16, c + 26], start=20, end=160, fill=(20, 34, 37, 255), width=5)
 
-av.save(f"{ASSETS}/avatar.png")
-print("wrote assets/clouds.png and assets/avatar.png")
+av.save(f"{ASSETS}/avatar.png") if REGEN_PLACEHOLDERS else None
+print("wrote placeholder clouds/avatar" if REGEN_PLACEHOLDERS else "skipped placeholders (use --placeholders)")
 
 # ---------- kawaii land pattern tiles ----------
 def wrap_ellipse(d, cx, cy, rx, ry, color):
@@ -104,7 +112,7 @@ for _ in range(12):
 for _ in range(5):
     flower(gd, rng2.uniform(0, SIZE), rng2.uniform(0, SIZE),
            (255, 189, 214, 255), (255, 255, 255, 255))
-grass.save(f"{ASSETS}/grass.png")
+grass.save(f"{ASSETS}/grass.png") if REGEN_PLACEHOLDERS else None
 
 # water: soft blue with wave curls
 water = Image.new("RGBA", (SIZE, SIZE), (124, 207, 238, 255))
@@ -119,7 +127,7 @@ for _ in range(16):
         for oy in (-SIZE, 0, SIZE):
             wd.arc([x + ox - w, y + oy - w * 0.6, x + ox + w, y + oy + w * 0.9],
                    start=195, end=345, fill=(226, 246, 253, 255), width=5)
-water.save(f"{ASSETS}/water.png")
+water.save(f"{ASSETS}/water.png") if REGEN_PLACEHOLDERS else None
 
 # forest: clustered round trees with highlights
 forest = Image.new("RGBA", (SIZE, SIZE), (124, 203, 102, 255))
@@ -132,8 +140,8 @@ for _ in range(20):
         r = rng2.uniform(12, 19)
         wrap_ellipse(fd, tx, ty, r, r * 0.92, (92, 177, 78, 255))
         wrap_ellipse(fd, tx - r * 0.3, ty - r * 0.35, r * 0.42, r * 0.36, (143, 220, 120, 255))
-forest.save(f"{ASSETS}/forest.png")
-print("wrote grass/water/forest pattern tiles")
+forest.save(f"{ASSETS}/forest.png") if REGEN_PLACEHOLDERS else None
+print("wrote placeholder land tiles" if REGEN_PLACEHOLDERS else "skipped placeholder land tiles")
 
 # ---------- footprint trail strip ----------
 # IMPORTANT: MapLibre line-pattern crops the image at NATIVE pixel scale to
@@ -157,3 +165,58 @@ fp_bbox = fp.getchannel("A").getbbox()
 assert fp_bbox[1] >= 1 and fp_bbox[3] <= 31, f"footprints clipped: {fp_bbox}"
 fp.save(f"{ASSETS}/footprints.png")
 print("wrote footprints strip", fp_bbox)
+
+# ---------- road & path textures (both-axis seamless small stones) ----------
+# Line patterns are cropped at native scale to the line width, so road
+# texture must look right in ANY horizontal slice: small stones, seamless
+# in both axes. Palette sampled from the generated cobble art.
+def cobble_tile(size, base, stones, outline, stone_r, jitter, name):
+    tile = Image.new("RGBA", (size, size), base)
+    d = ImageDraw.Draw(tile)
+    rngc = random.Random(23)
+    step = stone_r * 2 + 3
+    row = 0
+    y = 0
+    while y < size + step:
+        offset = (step // 2) if row % 2 else 0
+        x = offset
+        while x < size + step:
+            r = stone_r + rngc.uniform(-jitter, jitter)
+            cx = x + rngc.uniform(-1.5, 1.5)
+            cy = y + rngc.uniform(-1.5, 1.5)
+            color = stones[rngc.randrange(len(stones))]
+            for ox in (-size, 0, size):
+                for oy in (-size, 0, size):
+                    d.ellipse(
+                        [cx + ox - r, cy + oy - r * 0.85, cx + ox + r, cy + oy + r * 0.85],
+                        fill=color, outline=outline, width=2,
+                    )
+            x += step
+        y += step
+        row += 1
+    tile.save(f"{ASSETS}/{name}")
+    print("wrote", name)
+
+cobble_tile(
+    64,
+    base=(227, 177, 99, 255),
+    stones=[(248, 221, 165, 255), (245, 216, 158, 255), (250, 226, 172, 255), (243, 208, 145, 255)],
+    outline=(210, 160, 88, 255),
+    stone_r=7, jitter=1.5,
+    name="road-main.png",
+)
+
+# path: sparse pale pebbles on transparent, small strip
+path = Image.new("RGBA", (64, 16), (0, 0, 0, 0))
+pd = ImageDraw.Draw(path)
+rngp = random.Random(5)
+for x in range(4, 64, 13):
+    r = rngp.uniform(3.5, 5)
+    cy = 8 + rngp.uniform(-2, 2)
+    for ox in (-64, 0, 64):
+        pd.ellipse([x + ox - r, cy - r * 0.8, x + ox + r, cy + r * 0.8],
+                   fill=(238, 228, 200, 255), outline=(203, 176, 131, 255), width=2)
+pbbox = path.getchannel("A").getbbox()
+assert pbbox[1] >= 0 and pbbox[3] <= 16, f"path clipped: {pbbox}"
+path.save(f"{ASSETS}/road-path.png")
+print("wrote road-path strip", pbbox)
