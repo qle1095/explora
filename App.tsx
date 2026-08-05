@@ -345,8 +345,8 @@ export default function App() {
             layout={{ "line-join": "round", "line-cap": "round" }}
             paint={{
               "line-pattern": "footprints",
-              "line-width": 6,
-              "line-opacity": 0.85,
+              "line-width": 9,
+              "line-opacity": 0.9,
             }}
           />
         </GeoJSONSource>
