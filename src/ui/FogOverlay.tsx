@@ -7,9 +7,10 @@ interface Props {
   rimShape: Feature<Polygon>;
 }
 
-const DRIFT_X_PX_S = 5;
-const DRIFT_Y_PX_S = 2;
-const TILE = 512;
+// fill-translate shifts the whole fog geometry, not just the texture —
+// so the motion must stay tiny: a slow floating sway, never a scroll.
+const SWAY_X_PX = 5;
+const SWAY_Y_PX = 3.5;
 
 /**
  * The fog layers, with the cloud pattern drifting slowly like weather.
@@ -22,7 +23,10 @@ export function FogOverlay({ fogShape, rimShape }: Props) {
   useEffect(() => {
     const id = setInterval(() => {
       const t = (Date.now() - t0.current) / 1000;
-      setDrift([(t * DRIFT_X_PX_S) % TILE, (t * DRIFT_Y_PX_S) % TILE]);
+      setDrift([
+        SWAY_X_PX * Math.sin(t * 0.35),
+        SWAY_Y_PX * Math.cos(t * 0.23),
+      ]);
     }, 90);
     return () => clearInterval(id);
   }, []);
