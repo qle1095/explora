@@ -345,7 +345,7 @@ export default function App() {
             layout={{ "line-join": "round", "line-cap": "round" }}
             paint={{
               "line-pattern": "footprints",
-              "line-width": 9,
+              "line-width": 11,
               "line-opacity": 0.9,
             }}
           />

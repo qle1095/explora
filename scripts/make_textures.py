@@ -134,3 +134,26 @@ for _ in range(20):
         wrap_ellipse(fd, tx - r * 0.3, ty - r * 0.35, r * 0.42, r * 0.36, (143, 220, 120, 255))
 forest.save(f"{ASSETS}/forest.png")
 print("wrote grass/water/forest pattern tiles")
+
+# ---------- footprint trail strip ----------
+# IMPORTANT: MapLibre line-pattern crops the image at NATIVE pixel scale to
+# the line width — it does not scale. Strip height must fit inside
+# line-width(pt) * devicePixelRatio (11pt * 3 = 33px), or prints get sliced.
+FP_FILL = (240, 198, 138, 255)
+FP_LINE = (166, 120, 70, 255)
+
+def fp_stamp(angle):
+    st = Image.new("RGBA", (48, 28), (0, 0, 0, 0))
+    d = ImageDraw.Draw(st)
+    d.ellipse([16, 9, 38, 21], fill=FP_FILL, outline=FP_LINE, width=2)  # sole
+    d.ellipse([7, 11, 15, 20], fill=FP_FILL, outline=FP_LINE, width=2)  # heel
+    return st.rotate(angle, expand=False, resample=Image.BICUBIC)
+
+fp = Image.new("RGBA", (128, 32), (0, 0, 0, 0))
+up, down = fp_stamp(8), fp_stamp(-8)
+fp.paste(up, (8, -3), up)
+fp.paste(down, (70, 7), down)
+fp_bbox = fp.getchannel("A").getbbox()
+assert fp_bbox[1] >= 1 and fp_bbox[3] <= 31, f"footprints clipped: {fp_bbox}"
+fp.save(f"{ASSETS}/footprints.png")
+print("wrote footprints strip", fp_bbox)
