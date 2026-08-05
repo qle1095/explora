@@ -5,22 +5,27 @@ import subprocess
 
 SRC = "https://tiles.openfreemap.org/styles/liberty"
 
-# storybook palette
-PAPER = "#f6efdd"
-WATER = "#7cc9e8"
-GRASS = "#b5e3a5"
-WOOD = "#96d489"
-SAND = "#f4e3b2"
-BUILDING = "#f0dcb4"
-BUILDING_LINE = "#ddc292"
+# storybook palette — vivid game-board colors
+PAPER = "#f8eed3"
+WATER = "#5fc6ec"
+GRASS = "#93dc7c"
+WOOD = "#6fcb62"
+SAND = "#f7e3a6"
+BUILDING = "#eddfb8"
 ROAD_MINOR = "#ffffff"
-ROAD_MAJOR = "#ffd88f"
-MOTORWAY = "#ffc768"
-CASING = "#e6d7b6"
-PATH = "#e9e0cd"
-RAIL = "#cdb493"
-TEXT = "#49584f"
-HALO = "#f9f3e3"
+ROAD_MAJOR = "#ffd166"
+MOTORWAY = "#ffab4a"
+CASING = "#e3d3a8"
+PATH = "#eee4c8"
+TEXT = "#47563d"
+HALO = "#faf3dd"
+
+# Layers that make it look like a navigation app, not a game — dropped.
+DROP = (
+    "poi", "oneway", "one_way", "housenumber", "house_num", "rail",
+    "transit", "ferry", "aerialway", "airport", "aeroway", "helipad",
+    "building-3d", "building_3d", "oneway_", "road_shield", "shield",
+)
 
 style = json.loads(
     subprocess.run(
@@ -37,10 +42,20 @@ def has(layer_id, *words):
     return any(w in layer_id for w in words)
 
 
+style["layers"] = [
+    l for l in style["layers"] if not any(w in l["id"].lower() for w in DROP)
+]
+
 for layer in style["layers"]:
     lid = layer["id"].lower()
     ltype = layer["type"]
     paint = layer.setdefault("paint", {})
+
+    # toy-like rounded road strokes
+    if ltype == "line":
+        layout = layer.setdefault("layout", {})
+        layout["line-cap"] = "round"
+        layout["line-join"] = "round"
 
     if ltype == "background":
         paint["background-color"] = PAPER
@@ -56,7 +71,8 @@ for layer in style["layers"]:
             paint["fill-color"] = SAND
         elif has(lid, "building"):
             paint["fill-color"] = BUILDING
-            paint["fill-outline-color"] = BUILDING_LINE
+            paint["fill-opacity"] = 0.5
+            paint.pop("fill-outline-color", None)
         elif has(lid, "residential", "industrial", "commercial", "hospital", "school", "university", "aeroway", "pier"):
             paint["fill-color"] = PAPER
         paint.pop("fill-pattern", None)
