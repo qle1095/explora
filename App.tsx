@@ -332,6 +332,9 @@ export default function App() {
             waterTile: require("./assets/water.png"),
             grassTile: require("./assets/grass.png"),
             forestTile: require("./assets/forest.png"),
+            roadMain: require("./assets/road-main.png"),
+            roadPath: require("./assets/road-path.png"),
+            footprints: require("./assets/footprints.png"),
           }}
         />
         <FogOverlay fogShape={fogShape} rimShape={rimShape} />
@@ -341,9 +344,9 @@ export default function App() {
             id="trail-line"
             layout={{ "line-join": "round", "line-cap": "round" }}
             paint={{
-              "line-color": "#e0a055",
-              "line-width": 3,
-              "line-opacity": 0.75,
+              "line-pattern": "footprints",
+              "line-width": 14,
+              "line-opacity": 0.9,
             }}
           />
         </GeoJSONSource>
@@ -371,7 +374,7 @@ export default function App() {
                 id="puck-avatar"
                 layout={{
                   "icon-image": "avatar",
-                  "icon-size": 0.34,
+                  "icon-size": 0.19,
                   "icon-allow-overlap": true,
                   "icon-ignore-placement": true,
                 }}

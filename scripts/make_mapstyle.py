@@ -25,6 +25,8 @@ HALO = "#faf3dd"
 PATTERN_WATER = "waterTile"
 PATTERN_GRASS = "grassTile"
 PATTERN_FOREST = "forestTile"
+PATTERN_ROAD = "roadMain"
+PATTERN_PATH = "roadPath"
 
 # Navigation-app clutter, dropped for the game look.
 DROP = (
@@ -66,7 +68,7 @@ for layer in style["layers"]:
         paint["background-color"] = PAPER
 
     elif ltype == "fill":
-        paint.pop("fill-pattern", None)
+        had_pattern = paint.pop("fill-pattern", None) is not None
         if has(lid, "water"):
             paint["fill-color"] = WATER
             paint["fill-pattern"] = PATTERN_WATER
@@ -84,6 +86,9 @@ for layer in style["layers"]:
             paint.pop("fill-outline-color", None)
         elif has(lid, "residential", "industrial", "commercial", "hospital", "school", "university", "pier"):
             paint["fill-color"] = PAPER
+        elif had_pattern:
+            # pattern removed and no rule matched — avoid default-black fills
+            paint["fill-color"] = PAPER
 
     elif ltype == "fill-extrusion":
         paint["fill-extrusion-color"] = BUILDING
@@ -94,11 +99,12 @@ for layer in style["layers"]:
         elif has(lid, "casing"):
             paint["line-color"] = CASING
         elif has(lid, "motorway", "trunk"):
-            paint["line-color"] = MOTORWAY
+            paint["line-pattern"] = PATTERN_ROAD
         elif has(lid, "primary", "secondary", "tertiary", "major"):
-            paint["line-color"] = ROAD_MAJOR
+            paint["line-pattern"] = PATTERN_ROAD
         elif has(lid, "path", "footway", "steps", "cycleway", "pedestrian"):
-            paint["line-color"] = PATH
+            paint["line-pattern"] = PATTERN_PATH
+            paint.pop("line-dasharray", None)
         elif has(lid, "rail", "transit"):
             paint["line-color"] = RAIL
         elif has(lid, "road", "street", "minor", "service", "link", "highway"):
