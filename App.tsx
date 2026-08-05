@@ -62,8 +62,10 @@ import { PlacesModal } from "./src/ui/PlacesModal";
 import { StatsModal } from "./src/ui/StatsModal";
 import { Onboarding } from "./src/ui/Onboarding";
 import { DevPad } from "./src/ui/DevPad";
+import { FogOverlay } from "./src/ui/FogOverlay";
 
-const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// Storybook recolor of OpenFreeMap liberty (regenerate: scripts/make_mapstyle.py)
+const MAP_STYLE = require("./assets/mapstyle.json");
 const START_CENTER: [number, number] = [-122.4193, 37.7893];
 
 export default function App() {
@@ -88,18 +90,22 @@ export default function App() {
   }, []);
 
   const centerOnUser = useCallback(async () => {
-    const { status } = await Location.getForegroundPermissionsAsync();
-    if (status !== "granted") return;
-    const fix =
-      (await Location.getLastKnownPositionAsync()) ??
-      (await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      }));
-    if (fix) {
-      cameraRef.current?.jumpTo({
-        center: [fix.coords.longitude, fix.coords.latitude],
-        zoom: 16,
-      });
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const fix =
+        (await Location.getLastKnownPositionAsync()) ??
+        (await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }));
+      if (fix) {
+        cameraRef.current?.jumpTo({
+          center: [fix.coords.longitude, fix.coords.latitude],
+          zoom: 16,
+        });
+      }
+    } catch {
+      // No fix available (e.g. simulator with location unset) — stay put.
     }
   }, []);
 
@@ -325,26 +331,7 @@ export default function App() {
             avatar: require("./assets/avatar.png"),
           }}
         />
-        <GeoJSONSource id="fog-rim" data={rimShape}>
-          <Layer
-            type="fill"
-            id="fog-rim-fill"
-            paint={{
-              "fill-color": "#dbe9e6",
-              "fill-opacity": 0.9,
-            }}
-          />
-        </GeoJSONSource>
-        <GeoJSONSource id="fog" data={fogShape}>
-          <Layer
-            type="fill"
-            id="fog-fill"
-            paint={{
-              "fill-pattern": "clouds",
-              "fill-opacity": 0.97,
-            }}
-          />
-        </GeoJSONSource>
+        <FogOverlay fogShape={fogShape} rimShape={rimShape} />
         <GeoJSONSource id="trails" data={trailShape}>
           <Layer
             type="line"
