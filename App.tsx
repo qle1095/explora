@@ -329,6 +329,9 @@ export default function App() {
           images={{
             clouds: require("./assets/clouds.png"),
             avatar: require("./assets/avatar.png"),
+            waterTile: require("./assets/water.png"),
+            grassTile: require("./assets/grass.png"),
+            forestTile: require("./assets/forest.png"),
           }}
         />
         <FogOverlay fogShape={fogShape} rimShape={rimShape} />

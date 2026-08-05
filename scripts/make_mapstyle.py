@@ -5,22 +5,33 @@ import subprocess
 
 SRC = "https://tiles.openfreemap.org/styles/liberty"
 
-# storybook palette
-PAPER = "#f6efdd"
-WATER = "#7cc9e8"
-GRASS = "#b5e3a5"
-WOOD = "#96d489"
-SAND = "#f4e3b2"
-BUILDING = "#f0dcb4"
-BUILDING_LINE = "#ddc292"
+# kawaii palette
+PAPER = "#f9f0d8"
+WATER = "#7ccfee"
+GRASS = "#a8e087"
+WOOD = "#7ccb66"
+SAND = "#f7e3a6"
+BUILDING = "#eddfb8"
 ROAD_MINOR = "#ffffff"
-ROAD_MAJOR = "#ffd88f"
-MOTORWAY = "#ffc768"
-CASING = "#e6d7b6"
-PATH = "#e9e0cd"
+ROAD_MAJOR = "#ffd166"
+MOTORWAY = "#ffab4a"
+CASING = "#e3d3a8"
+PATH = "#eee4c8"
 RAIL = "#cdb493"
-TEXT = "#49584f"
-HALO = "#f9f3e3"
+TEXT = "#47563d"
+HALO = "#faf3dd"
+
+# Pattern names registered by the app's <Images> — the kawaii textures.
+PATTERN_WATER = "waterTile"
+PATTERN_GRASS = "grassTile"
+PATTERN_FOREST = "forestTile"
+
+# Navigation-app clutter, dropped for the game look.
+DROP = (
+    "poi", "oneway", "one_way", "housenumber", "house_num", "rail",
+    "transit", "ferry", "aerialway", "airport", "aeroway", "helipad",
+    "building-3d", "building_3d", "road_shield", "shield",
+)
 
 style = json.loads(
     subprocess.run(
@@ -37,29 +48,42 @@ def has(layer_id, *words):
     return any(w in layer_id for w in words)
 
 
+style["layers"] = [
+    l for l in style["layers"] if not any(w in l["id"].lower() for w in DROP)
+]
+
 for layer in style["layers"]:
     lid = layer["id"].lower()
     ltype = layer["type"]
     paint = layer.setdefault("paint", {})
 
+    if ltype == "line":
+        layout = layer.setdefault("layout", {})
+        layout["line-cap"] = "round"
+        layout["line-join"] = "round"
+
     if ltype == "background":
         paint["background-color"] = PAPER
 
     elif ltype == "fill":
+        paint.pop("fill-pattern", None)
         if has(lid, "water"):
             paint["fill-color"] = WATER
+            paint["fill-pattern"] = PATTERN_WATER
         elif has(lid, "wood", "forest"):
             paint["fill-color"] = WOOD
+            paint["fill-pattern"] = PATTERN_FOREST
         elif has(lid, "grass", "park", "green", "cemetery", "golf", "garden", "landcover", "landuse"):
             paint["fill-color"] = GRASS
+            paint["fill-pattern"] = PATTERN_GRASS
         elif has(lid, "sand", "beach"):
             paint["fill-color"] = SAND
         elif has(lid, "building"):
             paint["fill-color"] = BUILDING
-            paint["fill-outline-color"] = BUILDING_LINE
-        elif has(lid, "residential", "industrial", "commercial", "hospital", "school", "university", "aeroway", "pier"):
+            paint["fill-opacity"] = 0.45
+            paint.pop("fill-outline-color", None)
+        elif has(lid, "residential", "industrial", "commercial", "hospital", "school", "university", "pier"):
             paint["fill-color"] = PAPER
-        paint.pop("fill-pattern", None)
 
     elif ltype == "fill-extrusion":
         paint["fill-extrusion-color"] = BUILDING
