@@ -9,6 +9,7 @@ import {
 
 import type { PlaceNote } from "../db";
 import { computeStreaks, milestones } from "../stats";
+import { card, colors, font } from "./theme";
 
 interface Props {
   visible: boolean;
@@ -43,6 +44,7 @@ export function StatsModal({
       <View style={styles.sheet}>
         <View style={styles.grabber} />
         <ScrollView showsVerticalScrollIndicator={false}>
+          <Text style={styles.journalTitle}>Explorer’s Journal</Text>
           <Text style={styles.section}>EXPLORATION</Text>
           <View style={styles.tiles}>
             <View style={styles.tile}>
@@ -101,7 +103,7 @@ export function StatsModal({
           {stones.map((m) => (
             <View key={m.label} style={styles.milestone}>
               <Text style={[styles.check, m.hit && styles.checkHit]}>
-                {m.hit ? "●" : "○"}
+                {m.hit ? "🏅" : "○"}
               </Text>
               <View style={styles.milestoneText}>
                 <Text style={[styles.mLabel, !m.hit && styles.mLabelPending]}>
@@ -137,71 +139,84 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill, justifyContent: "flex-end" },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(60, 45, 25, 0.35)",
   },
   sheet: {
-    backgroundColor: "#132125",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    ...card,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     padding: 20,
     paddingBottom: 28,
     maxHeight: "80%",
-    borderWidth: 1,
-    borderColor: "rgba(67,184,176,0.25)",
   },
   grabber: {
     alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#2c4247",
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.cardBorder,
     marginBottom: 6,
   },
+  journalTitle: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontFamily: font.bold,
+    marginTop: 8,
+  },
   section: {
-    color: "#43b8b0",
+    color: colors.accentDeep,
     fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 2,
+    fontFamily: font.bold,
+    letterSpacing: 1.5,
     marginTop: 16,
     marginBottom: 8,
   },
   tiles: { flexDirection: "row", gap: 8 },
   tile: {
     flex: 1,
-    backgroundColor: "#0d181b",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#24393d",
+    backgroundColor: colors.inset,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.insetBorder,
     paddingVertical: 12,
     alignItems: "center",
   },
   tileValue: {
-    color: "#e2ecea",
+    color: colors.textPrimary,
     fontSize: 20,
-    fontWeight: "700",
+    fontFamily: font.bold,
     fontVariant: ["tabular-nums"],
   },
-  tileUnit: { fontSize: 13, color: "#92a7a7" },
-  tileLabel: { color: "#92a7a7", fontSize: 11, marginTop: 3 },
+  tileUnit: { fontSize: 13, color: colors.textSecondary },
+  tileLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 3,
+    fontFamily: font.medium,
+  },
   milestone: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 7,
     gap: 12,
   },
-  check: { color: "#2c4247", fontSize: 16, width: 20, textAlign: "center" },
-  checkHit: { color: "#43b8b0" },
+  check: { color: colors.textFaint, fontSize: 16, width: 24, textAlign: "center" },
+  checkHit: { color: colors.gold },
   milestoneText: { flex: 1 },
-  mLabel: { color: "#e2ecea", fontSize: 14, fontWeight: "600" },
-  mLabelPending: { color: "#5c7476" },
-  mDetail: { color: "#92a7a7", fontSize: 12 },
+  mLabel: { color: colors.textPrimary, fontSize: 14, fontFamily: font.demi },
+  mLabelPending: { color: colors.textFaint },
+  mDetail: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontFamily: font.medium,
+  },
   reset: {
     marginTop: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(224,120,100,0.5)",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "rgba(247, 127, 95, 0.6)",
     alignItems: "center",
     paddingVertical: 12,
   },
-  resetText: { color: "#e08a74", fontSize: 14, fontWeight: "700" },
+  resetText: { color: colors.coral, fontSize: 14, fontFamily: font.bold },
 });

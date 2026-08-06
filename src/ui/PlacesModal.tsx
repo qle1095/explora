@@ -7,6 +7,7 @@ import {
 } from "react-native";
 
 import type { PlaceNote } from "../db";
+import { card, colors, font } from "./theme";
 
 interface Props {
   visible: boolean;
@@ -73,37 +74,51 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill, justifyContent: "flex-end" },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(60, 45, 25, 0.35)",
   },
   sheet: {
-    backgroundColor: "#132125",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    ...card,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     padding: 20,
     paddingBottom: 36,
     maxHeight: "70%",
-    borderWidth: 1,
-    borderColor: "rgba(67,184,176,0.25)",
   },
   grabber: {
     alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#2c4247",
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.cardBorder,
     marginBottom: 14,
   },
-  title: { color: "#e2ecea", fontSize: 18, fontWeight: "700", marginBottom: 8 },
-  empty: { color: "#92a7a7", fontSize: 14, lineHeight: 20, paddingVertical: 12 },
+  title: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontFamily: font.bold,
+    marginBottom: 8,
+  },
+  empty: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: 12,
+    fontFamily: font.medium,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#1c2f33",
+    borderBottomColor: colors.insetBorder,
   },
   rowMain: { flex: 1, paddingVertical: 12 },
-  name: { color: "#e2ecea", fontSize: 15, fontWeight: "600" },
-  body: { color: "#92a7a7", fontSize: 13, marginTop: 2 },
+  name: { color: colors.textPrimary, fontSize: 15, fontFamily: font.demi },
+  body: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+    fontFamily: font.medium,
+  },
   delete: { padding: 10 },
-  deleteText: { color: "#5c7476", fontSize: 15 },
+  deleteText: { color: colors.textFaint, fontSize: 15 },
 });

@@ -63,6 +63,7 @@ import { StatsModal } from "./src/ui/StatsModal";
 import { Onboarding } from "./src/ui/Onboarding";
 import { DevPad } from "./src/ui/DevPad";
 import { FogOverlay } from "./src/ui/FogOverlay";
+import { card, colors, font } from "./src/ui/theme";
 
 // Storybook recolor of OpenFreeMap liberty (regenerate: scripts/make_mapstyle.py)
 const MAP_STYLE = require("./assets/mapstyle.json");
@@ -387,15 +388,15 @@ export default function App() {
       </View>
 
       <Pressable style={styles.hud} onPress={() => setStatsOpen(true)}>
-        <Text style={styles.hudTitle}>EXPLORA</Text>
+        <Text style={styles.hudTitle}>Explora</Text>
         <Text style={styles.hudStat}>
-          {stats.count.toLocaleString()} cells · {stats.areaKm2.toFixed(1)} km²
-          · {stats.earthPct}% of Earth
+          You've uncovered {stats.areaKm2.toFixed(1)} km² of the world ·{" "}
+          {stats.count.toLocaleString()} patches
         </Text>
         <Text style={styles.hudHint}>
           {denied
-            ? "location permission denied — enable it in Settings"
-            : "fog clears as you go · tap here for stats"}
+            ? "Explora needs location to clear the fog — enable it in Settings"
+            : "the fog is waiting… · tap here for your journal"}
         </Text>
       </Pressable>
 
@@ -404,20 +405,18 @@ export default function App() {
           style={[styles.button, styles.squareButton, follow && styles.buttonActive]}
           onPress={recenter}
         >
-          <Text style={[styles.buttonText, follow && styles.buttonTextActive]}>
-            ⌖
-          </Text>
+          <Text style={styles.buttonEmoji}>🧭</Text>
         </Pressable>
         <Pressable
           style={[styles.button, auto && styles.buttonActive]}
           onPress={() => void toggleAuto()}
         >
           <Text style={[styles.buttonText, auto && styles.buttonTextActive]}>
-            {auto ? "Auto ✓" : "Auto"}
+            {auto ? "🌙 Auto on" : "🌙 Auto"}
           </Text>
         </Pressable>
         <Pressable style={styles.button} onPress={() => setPlacesOpen(true)}>
-          <Text style={styles.buttonText}>Places ({notes.length})</Text>
+          <Text style={styles.buttonText}>📔 {notes.length}</Text>
         </Pressable>
         <Pressable
           style={[styles.button, styles.squareButton]}
@@ -426,13 +425,13 @@ export default function App() {
             setSheetOpen(true);
           }}
         >
-          <Text style={styles.buttonText}>＋</Text>
+          <Text style={styles.buttonEmoji}>📍</Text>
         </Pressable>
         <Pressable
           style={[styles.button, styles.squareButton]}
           onPress={() => void shareMap()}
         >
-          <Text style={styles.buttonText}>↗</Text>
+          <Text style={styles.buttonEmoji}>📸</Text>
         </Pressable>
       </View>
 
@@ -474,48 +473,59 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b1417" },
+  container: { flex: 1, backgroundColor: "#22333a" },
   map: { flex: 1 },
   hud: {
+    ...card,
     position: "absolute",
     top: 64,
     left: 16,
     right: 16,
     alignItems: "flex-start",
-    backgroundColor: "rgba(11, 20, 23, 0.82)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(67, 184, 176, 0.35)",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
   },
   hudTitle: {
-    color: "#43b8b0",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 3,
+    color: colors.accentDeep,
+    fontFamily: font.bold,
+    fontSize: 15,
   },
-  hudStat: { color: "#e2ecea", fontSize: 14, marginTop: 4 },
-  hudHint: { color: "#92a7a7", fontSize: 11, marginTop: 2 },
+  hudStat: {
+    color: colors.textPrimary,
+    fontFamily: font.demi,
+    fontSize: 13.5,
+    marginTop: 2,
+  },
+  hudHint: {
+    color: colors.textFaint,
+    fontFamily: font.medium,
+    fontSize: 11.5,
+    marginTop: 1,
+  },
   controls: {
     position: "absolute",
     bottom: 40,
     left: 16,
     right: 16,
     flexDirection: "row",
-    gap: 10,
+    gap: 9,
   },
   button: {
+    ...card,
     flex: 1,
-    backgroundColor: "rgba(11, 20, 23, 0.88)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(67, 184, 176, 0.35)",
+    borderRadius: 22,
     alignItems: "center",
-    paddingVertical: 13,
+    justifyContent: "center",
+    paddingVertical: 12,
   },
-  squareButton: { flex: 0, width: 46 },
-  buttonActive: { backgroundColor: "#43b8b0" },
-  buttonText: { color: "#e2ecea", fontWeight: "700", fontSize: 14 },
-  buttonTextActive: { color: "#0b1417" },
+  squareButton: { flex: 0, width: 48 },
+  buttonActive: { backgroundColor: colors.accent, borderColor: colors.accentDeep },
+  buttonEmoji: { fontSize: 19 },
+  buttonText: {
+    color: colors.textPrimary,
+    fontFamily: font.demi,
+    fontSize: 14,
+  },
+  buttonTextActive: { color: colors.onAccent },
 });
