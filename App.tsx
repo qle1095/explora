@@ -335,6 +335,8 @@ export default function App() {
             roadMain: require("./assets/road-main.png"),
             roadPath: require("./assets/road-path.png"),
             footprints: require("./assets/footprints.png"),
+            pinFood: require("./assets/pin-food.png"),
+            pinSight: require("./assets/pin-sight.png"),
           }}
         />
         <FogOverlay fogShape={fogShape} rimShape={rimShape} />

@@ -220,3 +220,37 @@ pbbox = path.getchannel("A").getbbox()
 assert pbbox[1] >= 0 and pbbox[3] <= 16, f"path clipped: {pbbox}"
 path.save(f"{ASSETS}/road-path.png")
 print("wrote road-path strip", pbbox)
+
+# ---------- POI pin badges (food + attractions) ----------
+def pin_badge(base, name, glyph):
+    """Teardrop map pin with white inner disc and a simple glyph."""
+    img = Image.new("RGBA", (64, 76), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    OUT = (146, 100, 58, 255)
+    d.polygon([(15, 43), (49, 43), (32, 70)], fill=base, outline=OUT)
+    d.ellipse([7, 4, 57, 54], fill=base, outline=OUT, width=3)
+    d.polygon([(17, 44), (47, 44), (32, 67)], fill=base)  # cover seam
+    d.ellipse([15, 12, 49, 46], fill=(255, 252, 244, 255))
+    glyph(d)
+    return img
+
+def food_glyph(d):
+    base = (247, 127, 95, 255)
+    d.pieslice([21, 26, 43, 44], 0, 180, fill=base)                    # bowl
+    d.rectangle([20, 33, 44, 35], fill=base)                           # rim
+    for x in (27, 33, 39):                                             # steam
+        d.arc([x - 3, 16, x + 3, 28], 90, 270, fill=base, width=2)
+
+def star_glyph(d):
+    import math
+    cx, cy, R, r = 32, 29, 12, 5
+    pts = []
+    for i in range(10):
+        rad = R if i % 2 == 0 else r
+        a = -math.pi / 2 + i * math.pi / 5
+        pts.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+    d.polygon(pts, fill=(242, 183, 75, 255))
+
+pin_badge((247, 127, 95, 255), "food", food_glyph).save(f"{ASSETS}/pin-food.png")
+pin_badge((242, 183, 75, 255), "sight", star_glyph).save(f"{ASSETS}/pin-sight.png")
+print("wrote pin-food.png and pin-sight.png")

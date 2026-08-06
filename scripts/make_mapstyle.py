@@ -119,6 +119,48 @@ for layer in style["layers"]:
         paint["text-halo-color"] = HALO
         paint["text-halo-width"] = 1.4
 
+# Curated POIs: only food & attractions, with our cute pin badges.
+# Everything else (random shops, services) stays hidden.
+FOOD_CLASSES = [
+    "restaurant", "fast_food", "cafe", "bar", "ice_cream", "beer",
+    "bakery", "food_court",
+]
+SIGHT_CLASSES = [
+    "attraction", "museum", "monument", "gallery", "art_gallery", "zoo",
+    "aquarium", "castle", "theatre", "viewpoint", "theme_park",
+]
+style["layers"].append({
+    "id": "explora-poi",
+    "type": "symbol",
+    "source": "openmaptiles",
+    "source-layer": "poi",
+    "minzoom": 14,
+    "filter": [
+        "all",
+        ["match", ["geometry-type"], ["Point", "MultiPoint"], True, False],
+        ["match", ["get", "class"], FOOD_CLASSES + SIGHT_CLASSES, True, False],
+    ],
+    "layout": {
+        "icon-image": [
+            "match", ["get", "class"], FOOD_CLASSES, "pinFood", "pinSight",
+        ],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 14, 0.3, 17, 0.48],
+        "icon-anchor": "bottom",
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": 10.5,
+        "text-anchor": "top",
+        "text-offset": [0, 0.3],
+        "text-optional": True,
+        "text-max-width": 7,
+    },
+    "paint": {
+        "text-color": TEXT,
+        "text-halo-color": HALO,
+        "text-halo-width": 1.3,
+    },
+})
+
 with open("assets/mapstyle.json", "w") as f:
     json.dump(style, f)
 print(f"wrote assets/mapstyle.json ({len(style['layers'])} layers)")
