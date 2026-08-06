@@ -21,7 +21,14 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,12 +40,18 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Explora clears the fog on your map along the places you actually go.",
-          "locationAlwaysAndWhenInUsePermission": "With Always access, Explora keeps clearing your fog passively as you go about your day \u2014 even with the app closed.",
+          "locationAlwaysAndWhenInUsePermission": "With Always access, Explora keeps clearing your fog passively as you go about your day — even with the app closed.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "84d75610-0086-4c4a-a0af-6501139bec27"
+      }
+    },
+    "owner": "qle1095"
   }
 }
