@@ -18,6 +18,8 @@ interface Props {
   earthPct: string;
   days: string[];
   notes: PlaceNote[];
+  backgroundOn: boolean;
+  onToggleBackground: () => void;
   onReset: () => void;
   onClose: () => void;
 }
@@ -29,6 +31,8 @@ export function StatsModal({
   earthPct,
   days,
   notes,
+  backgroundOn,
+  onToggleBackground,
   onReset,
   onClose,
 }: Props) {
@@ -113,6 +117,19 @@ export function StatsModal({
               </View>
             </View>
           ))}
+          <Pressable style={styles.bgRow} onPress={onToggleBackground}>
+            <Text style={styles.bgLabel}>
+              {backgroundOn ? "🌙" : "💤"} Background exploring
+            </Text>
+            <Text style={[styles.bgState, !backgroundOn && styles.bgStateOff]}>
+              {backgroundOn ? "on" : "paused"}
+            </Text>
+          </Pressable>
+          <Text style={styles.bgHint}>
+            {backgroundOn
+              ? "Fog keeps clearing as you go about your day, even with the app closed."
+              : "Explora only records while the app is open. Tap to resume."}
+          </Text>
           <Pressable
             style={styles.reset}
             onPress={() =>
@@ -209,6 +226,28 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: font.medium,
+  },
+  bgRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.inset,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.insetBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 20,
+  },
+  bgLabel: { color: colors.textPrimary, fontSize: 14, fontFamily: font.demi },
+  bgState: { color: colors.accentDeep, fontSize: 14, fontFamily: font.bold },
+  bgStateOff: { color: colors.textFaint },
+  bgHint: {
+    color: colors.textSecondary,
+    fontSize: 11.5,
+    fontFamily: font.medium,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
   reset: {
     marginTop: 20,

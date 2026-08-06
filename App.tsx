@@ -86,9 +86,18 @@ export default function App() {
   const cameraRef = useRef<CameraRef>(null);
   const mapWrapRef = useRef<View>(null);
 
+  // Background exploring is inherent, not a mode: (re)arm it on every
+  // launch once onboarded. Idempotent; quietly a no-op if permission is
+  // missing (foreground exploring still works).
   useEffect(() => {
-    void isBackgroundTracking().then(setAuto);
-  }, []);
+    if (!onboarded) return;
+    void (async () => {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const result = await startBackgroundTracking();
+      setAuto(result === "on");
+    })();
+  }, [onboarded]);
 
   const centerOnUser = useCallback(async () => {
     try {
@@ -262,7 +271,7 @@ export default function App() {
     });
   };
 
-  const toggleAuto = async () => {
+  const toggleBackground = async () => {
     if (auto) {
       await stopBackgroundTracking();
       setAuto(false);
@@ -271,7 +280,7 @@ export default function App() {
       if (result === "denied") {
         Alert.alert(
           "Always access needed",
-          "Passive exploring needs 'Always' location access so fog can clear with the app closed. You can enable it in Settings.",
+          "Background exploring needs 'Always' location access so fog can clear with the app closed. You can enable it in Settings.",
         );
       } else {
         setAuto(true);
@@ -407,16 +416,8 @@ export default function App() {
         >
           <Text style={styles.buttonEmoji}>🧭</Text>
         </Pressable>
-        <Pressable
-          style={[styles.button, auto && styles.buttonActive]}
-          onPress={() => void toggleAuto()}
-        >
-          <Text style={[styles.buttonText, auto && styles.buttonTextActive]}>
-            {auto ? "🌙 Auto on" : "🌙 Auto"}
-          </Text>
-        </Pressable>
         <Pressable style={styles.button} onPress={() => setPlacesOpen(true)}>
-          <Text style={styles.buttonText}>📔 {notes.length}</Text>
+          <Text style={styles.buttonText}>📔 My places ({notes.length})</Text>
         </Pressable>
         <Pressable
           style={[styles.button, styles.squareButton]}
@@ -462,6 +463,8 @@ export default function App() {
         earthPct={stats.earthPct}
         days={statsOpen ? exploredDays() : []}
         notes={notes}
+        backgroundOn={auto}
+        onToggleBackground={() => void toggleBackground()}
         onReset={handleResetMap}
         onClose={() => setStatsOpen(false)}
       />
