@@ -68,6 +68,48 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
+/** Overpass is a free shared service; the main instance 504s under load. */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
+
+/**
+ * Run an Overpass query, falling back across mirrors. Throws when every
+ * endpoint fails — callers must not confuse "lookup broke" with "nothing
+ * is around you", which is what silently returning [] used to do.
+ */
+async function overpass(query: string): Promise<OverpassElement[]> {
+  let lastError: unknown = new Error("No Overpass endpoint reachable");
+  for (const url of OVERPASS_ENDPOINTS) {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 30_000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: HEADERS,
+        body: `data=${encodeURIComponent(query)}`,
+        signal: abort.signal,
+      });
+      if (!res.ok) throw new Error(`Overpass ${res.status} from ${url}`);
+      const data = (await res.json()) as {
+        elements?: OverpassElement[];
+        remark?: string;
+      };
+      // A server-side timeout still arrives as HTTP 200 carrying a `remark`
+      // and an empty/truncated element list — a failure, not an empty area.
+      if (data.remark) throw new Error(`Overpass remark: ${data.remark}`);
+      return data.elements ?? [];
+    } catch (err) {
+      lastError = err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Exclusion list for the nearby check-in list: everyday-errand and
  * service spots travelers don't check into. Everything else shows,
@@ -101,7 +143,12 @@ function isExcluded(tags: Record<string, string>): boolean {
 function categoryEmoji(t: Record<string, string>): string {
   if ("tourism" in t || "historic" in t) return "🏛️";
   if (
-    ["restaurant", "cafe", "bar", "pub", "fast_food", "ice_cream", "food_court", "biergarten"].includes(t.amenity ?? "") ||
+    ["bar", "pub", "nightclub", "biergarten", "juice_bar"].includes(t.amenity ?? "") ||
+    ["alcohol", "beverages", "wine", "coffee", "tea", "bubble_tea"].includes(t.shop ?? "")
+  )
+    return "🍹";
+  if (
+    ["restaurant", "cafe", "fast_food", "ice_cream", "food_court"].includes(t.amenity ?? "") ||
     t.shop === "bakery"
   )
     return "🍜";
@@ -111,48 +158,50 @@ function categoryEmoji(t: Record<string, string>): string {
   return "📍";
 }
 
+const NEARBY_RADIUS_M = 250;
+const NEARBY_LIMIT = 20;
+
 /**
  * Named POIs within ~250m of a point (Overpass API — keyless, fine for
  * prototype volumes). The checkpoint flow: "what's around me right now?"
+ *
+ * Throws if the lookup fails, so the UI can offer a retry instead of
+ * pretending the neighbourhood is empty.
  */
 export async function nearbyPlaces(
   lat: number,
   lng: number,
 ): Promise<PlaceResult[]> {
-  const around = `(around:250,${lat},${lng})`;
+  const around = `(around:${NEARBY_RADIUS_M},${lat},${lng})`;
+  // No `out` limit on purpose. Overpass emits in id order (and all nodes
+  // before any way), never by distance, so any cap truncates arbitrarily —
+  // dropping a shop 50m away while keeping one at 240m, and hiding
+  // building-mapped POIs entirely once enough named nodes exist. Fetch the
+  // whole radius and rank it here; 250m bounds the payload on its own.
   const query = `
-    [out:json][timeout:10];
+    [out:json][timeout:25];
     ( nwr${around}[name][amenity];
       nwr${around}[name][shop];
       nwr${around}[name][tourism];
       nwr${around}[name][historic];
       nwr${around}[name][leisure]; );
-    out center 40;`;
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: HEADERS,
-    body: `data=${encodeURIComponent(query)}`,
-  });
-  if (!res.ok) return [];
-  const data = (await res.json()) as { elements: OverpassElement[] };
+    out center;`;
+  const elements = await overpass(query);
 
-  const seen = new Set<string>();
-  const results: (PlaceResult & { distM: number })[] = [];
-  for (const el of data.elements) {
-    const name = el.tags?.name;
+  const scored: (PlaceResult & { distM: number })[] = [];
+  for (const el of elements) {
+    const tags = el.tags ?? {};
+    const name = tags.name;
     const pLat = el.lat ?? el.center?.lat;
     const pLng = el.lon ?? el.center?.lon;
-    if (!name || pLat == null || pLng == null || seen.has(name)) continue;
-    const tags = el.tags ?? {};
-    if (isExcluded(tags)) continue;
-    seen.add(name);
+    if (!name || pLat == null || pLng == null || isExcluded(tags)) continue;
     const kind =
       tags.amenity ?? tags.shop ?? tags.tourism ?? tags.historic ?? tags.leisure ?? "";
     const distM = Math.hypot(
       (pLat - lat) * 111_320,
       (pLng - lng) * 111_320 * Math.cos((lat * Math.PI) / 180),
     );
-    results.push({
+    scored.push({
       name,
       detail: `${categoryEmoji(tags)} ${kind.replace(/_/g, " ")} · ${Math.round(distM)}m away`,
       lat: pLat,
@@ -160,7 +209,21 @@ export async function nearbyPlaces(
       distM,
     });
   }
-  return results.sort((a, b) => a.distM - b.distM).slice(0, 20);
+
+  // Sort before deduping so the nearest branch of a chain wins, and key on
+  // position as well as name so two real branches both survive. ~4dp is
+  // ~11m, enough to collapse a POI mapped as both a node and a building.
+  scored.sort((a, b) => a.distM - b.distM);
+  const seen = new Set<string>();
+  const results: PlaceResult[] = [];
+  for (const place of scored) {
+    const key = `${place.name}@${place.lat.toFixed(4)},${place.lng.toFixed(4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(place);
+    if (results.length === NEARBY_LIMIT) break;
+  }
+  return results;
 }
 
 export async function reversePlace(

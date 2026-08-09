@@ -28,6 +28,8 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [nearby, setNearby] = useState<PlaceResult[]>([]);
+  const [nearbyFailed, setNearbyFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [searching, setSearching] = useState(false);
   const [body, setBody] = useState("");
   const [verdict, setVerdict] = useState(true);
@@ -47,9 +49,16 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
     if (!visible || place || !near) return;
     let cancelled = false;
     setSearching(true);
+    setNearbyFailed(false);
     nearbyPlaces(near[1], near[0])
       .then((r) => {
         if (!cancelled) setNearby(r);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNearby([]);
+          setNearbyFailed(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setSearching(false);
@@ -57,7 +66,7 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [visible, place, near]);
+  }, [visible, place, near, reloadKey]);
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -101,6 +110,16 @@ export function NoteSheet({ visible, place, near, onSave, onClose }: Props) {
             {searching && <ActivityIndicator color="#43b8b0" />}
             {query.trim().length < 3 && nearby.length > 0 && (
               <Text style={styles.sectionLabel}>NEAR YOU</Text>
+            )}
+            {query.trim().length < 3 && nearbyFailed && !searching && (
+              <Pressable
+                style={styles.retryRow}
+                onPress={() => setReloadKey((k) => k + 1)}
+              >
+                <Text style={styles.retryText}>
+                  Couldn’t load nearby places. Tap to retry.
+                </Text>
+              </Pressable>
             )}
             <FlatList
               data={query.trim().length < 3 ? nearby : results}
@@ -263,6 +282,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   customText: { color: colors.accentDeep, fontSize: 14, fontFamily: font.demi },
+  retryRow: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.coral,
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  retryText: { color: colors.textSecondary, fontSize: 13, fontFamily: font.demi },
   result: {
     paddingVertical: 10,
     borderBottomWidth: 1,
