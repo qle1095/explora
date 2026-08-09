@@ -27,7 +27,6 @@ import {
   buildFogShape,
   buildRevealMask,
   exploredStats,
-  revealAt,
   thinPoints,
   unionMasks,
   circlesUnion,
@@ -37,7 +36,6 @@ import * as Location from "expo-location";
 
 import {
   addNote,
-  addVisitPoint,
   deleteNote,
   exploredDays,
   getKV,
@@ -46,7 +44,6 @@ import {
   loadCells,
   loadTrails,
   resetMap,
-  saveCells,
   setKV,
   type PlaceNote,
 } from "./src/db";
@@ -230,19 +227,6 @@ export default function App() {
     [position],
   );
 
-  // Dev cheat while GPS is off: tap to reveal (persisted like a real visit).
-  const handlePress = (event: NativeSyntheticEvent<PressEvent>) => {
-    const [lng, lat] = event.nativeEvent.lngLat;
-    addVisitPoint(lat, lng);
-    setVisitPoints((prev) => [...prev, [lng, lat]]);
-    setCells((prev) => {
-      const next = revealAt(prev, lat, lng);
-      const fresh = [...next].filter((c) => !prev.has(c));
-      if (fresh.length) saveCells(fresh);
-      return next;
-    });
-  };
-
   const handleLongPress = async (event: NativeSyntheticEvent<PressEvent>) => {
     const [lng, lat] = event.nativeEvent.lngLat;
     setSheetPlace(null);
@@ -327,7 +311,6 @@ export default function App() {
         <MapView
           style={styles.map}
           mapStyle={MAP_STYLE}
-          onPress={handlePress}
           onLongPress={handleLongPress}
           onRegionWillChange={handleRegionWillChange}
         >
