@@ -50,7 +50,7 @@ export function FogOverlay({ fogShape, rimShape }: Props) {
           paint={{
             "fill-pattern": "clouds",
             // Misty, not opaque: big shapes ghost through, details don't.
-            "fill-opacity": 0.84,
+            "fill-opacity": 0.82,
             "fill-translate": drift,
             "fill-translate-anchor": "viewport",
           }}
