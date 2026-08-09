@@ -50,6 +50,7 @@ import {
 import { useTracking } from "./src/useTracking";
 import {
   isBackgroundTracking,
+  ensureBackgroundTracking,
   startBackgroundTracking,
   stopBackgroundTracking,
 } from "./src/backgroundLocation";
@@ -88,12 +89,7 @@ export default function App() {
   // missing (foreground exploring still works).
   useEffect(() => {
     if (!onboarded) return;
-    void (async () => {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const result = await startBackgroundTracking();
-      setAuto(result === "on");
-    })();
+    void ensureBackgroundTracking().then((r) => setAuto(r === "on"));
   }, [onboarded]);
 
   const centerOnUser = useCallback(async () => {
@@ -131,17 +127,25 @@ export default function App() {
     setAuto(result === "on");
   };
 
-  // The background task writes straight to SQLite; pick its work up
-  // whenever the app returns to the foreground.
+  // The background task writes straight to SQLite; pick its work up whenever
+  // the app returns to the foreground. Trails matter here too: the session
+  // that just ended was flushed to the DB on the way out, and until it is
+  // read back the fog re-covers everywhere it was walked.
+  //
+  // Re-arming belongs on the same edge — iOS may have paused the task while
+  // we were away, and it never restarts one on its own.
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        setCells(new Set(loadCells()));
-        setVisitPoints(listVisitPoints());
+      if (state !== "active") return;
+      setCells(new Set(loadCells()));
+      setVisitPoints(listVisitPoints());
+      setPastTrails(loadTrails());
+      if (onboarded) {
+        void ensureBackgroundTracking().then((r) => setAuto(r === "on"));
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [onboarded]);
 
   const onCells = useCallback((fresh: string[]) => {
     setCells((prev) => {

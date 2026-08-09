@@ -28,27 +28,56 @@ TaskManager.defineTask(BG_TASK, async ({ data, error }) => {
 
 export type BackgroundStatus = "on" | "off" | "denied";
 
+/**
+ * Stop-then-start rather than skipping when already registered. iOS can
+ * pause a running task on its own and never resumes it — and a paused task
+ * still reports as started, so a `hasStartedLocationUpdatesAsync` guard here
+ * would turn every pause into permanent silence.
+ */
+async function armUpdates(): Promise<void> {
+  if (await Location.hasStartedLocationUpdatesAsync(BG_TASK)) {
+    await Location.stopLocationUpdatesAsync(BG_TASK);
+  }
+  await Location.startLocationUpdatesAsync(BG_TASK, {
+    accuracy: Location.Accuracy.Balanced,
+    // Apple suspends background delivery when coarse accuracy is combined
+    // with distance filtering, so keep the filter well inside the ~100m the
+    // Balanced accuracy already costs us.
+    distanceInterval: 50,
+    // Never let the system pause us. Explora is a lifetime record; a gap it
+    // cannot detect is worse than the battery a steady coarse fix costs.
+    pausesUpdatesAutomatically: false,
+    // Fitness makes iOS treat a stop as "workout over" and go quiet. This is
+    // ambient life logging, not a workout.
+    activityType: Location.ActivityType.Other,
+    showsBackgroundLocationIndicator: false,
+    foregroundService: {
+      notificationTitle: "Explora is mapping your travels",
+      notificationBody: "Fog clears where you go.",
+      notificationColor: "#43b8b0",
+    },
+  });
+}
+
+/** Prompts for permission — for onboarding and the explicit toggle. */
 export async function startBackgroundTracking(): Promise<BackgroundStatus> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== "granted") return "denied";
   const bg = await Location.requestBackgroundPermissionsAsync();
   if (bg.status !== "granted") return "denied";
+  await armUpdates();
+  return "on";
+}
 
-  if (!(await Location.hasStartedLocationUpdatesAsync(BG_TASK))) {
-    await Location.startLocationUpdatesAsync(BG_TASK, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 150,
-      deferredUpdatesInterval: 60_000,
-      pausesUpdatesAutomatically: true,
-      activityType: Location.ActivityType.Fitness,
-      showsBackgroundLocationIndicator: false,
-      foregroundService: {
-        notificationTitle: "Explora is mapping your travels",
-        notificationBody: "Fog clears where you go.",
-        notificationColor: "#43b8b0",
-      },
-    });
-  }
+/**
+ * Re-arm without ever prompting — safe to call on every foreground, which
+ * is exactly when a pause that happened while we were away needs undoing.
+ */
+export async function ensureBackgroundTracking(): Promise<BackgroundStatus> {
+  const fg = await Location.getForegroundPermissionsAsync();
+  const bg = await Location.getBackgroundPermissionsAsync();
+  if (fg.status !== "granted" || bg.status !== "granted") return "denied";
+  await armUpdates();
   return "on";
 }
 
