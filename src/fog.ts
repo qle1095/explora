@@ -1,6 +1,6 @@
 import { gridDisk, latLngToCell } from "h3-js";
 import polygonClipping, { type MultiPolygon as ClipMultiPolygon } from "polygon-clipping";
-import type { Feature, Polygon } from "geojson";
+import type { Feature, MultiPolygon, Polygon } from "geojson";
 
 /**
  * H3 resolution 10: cells ~120m across (~0.015 km^2).
@@ -129,6 +129,29 @@ export function buildFogShape(visible: ClipMultiPolygon): Feature<Polygon> {
       type: "Polygon",
       coordinates: [WORLD_RING, ...holes],
     },
+  };
+}
+
+/**
+ * The rim band: the annulus between the full-size reveal mask and the
+ * shrunken one, i.e. a thin halo hugging the inside of every cleared edge.
+ *
+ * This must stay a band. Painting the rim as another world-covering fog
+ * polygon puts an opaque sheet under the clouds and blacks out the map —
+ * the mist is only misty because nothing solid sits beneath it.
+ */
+export function buildRimShape(
+  mask: ClipMultiPolygon,
+  rimMask: ClipMultiPolygon,
+): Feature<MultiPolygon> {
+  const band =
+    mask.length === 0 || rimMask.length === 0
+      ? mask
+      : polygonClipping.difference(mask, rimMask);
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "MultiPolygon", coordinates: band },
   };
 }
 

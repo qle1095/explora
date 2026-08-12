@@ -18,6 +18,8 @@ import {
   Layer,
   Map as MapView,
   type CameraRef,
+  type MapRef,
+  type PixelPointBounds,
   type PressEvent,
   type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
@@ -26,6 +28,7 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import {
   buildFogShape,
   buildRevealMask,
+  buildRimShape,
   exploredStats,
   thinPoints,
   unionMasks,
@@ -61,11 +64,44 @@ import { StatsModal } from "./src/ui/StatsModal";
 import { Onboarding } from "./src/ui/Onboarding";
 import { DevPad } from "./src/ui/DevPad";
 import { FogOverlay } from "./src/ui/FogOverlay";
+import { NoteCard } from "./src/ui/NoteCard";
 import { card, colors, font } from "./src/ui/theme";
 
 // Storybook recolor of OpenFreeMap liberty (regenerate: scripts/make_mapstyle.py)
 const MAP_STYLE = require("./assets/mapstyle.json");
 const START_CENTER: [number, number] = [-122.4193, 37.7893];
+
+// A tap is queried as a box, not a point: the note pins are 6px circles and
+// nobody can hit those. 22 matches the 44px hitbox MapLibre uses for sources.
+const TAP_SLOP_PX = 22;
+
+// OpenFreeMap's vector tiles give a POI only `name` and `class` — no address,
+// no hours. This turns the class into something worth showing on the sheet.
+const POI_LABELS: Record<string, string> = {
+  restaurant: "Restaurant",
+  fast_food: "Fast food",
+  cafe: "Cafe",
+  bar: "Bar",
+  beer: "Pub",
+  ice_cream: "Ice cream",
+  bakery: "Bakery",
+  food_court: "Food court",
+  attraction: "Attraction",
+  museum: "Museum",
+  monument: "Monument",
+  gallery: "Gallery",
+  art_gallery: "Art gallery",
+  zoo: "Zoo",
+  aquarium: "Aquarium",
+  castle: "Castle",
+  theatre: "Theatre",
+  viewpoint: "Viewpoint",
+  theme_park: "Theme park",
+};
+
+function poiDetail(cls: unknown): string {
+  return typeof cls === "string" ? (POI_LABELS[cls] ?? "On the map") : "";
+}
 
 export default function App() {
   const [cells, setCells] = useState(() => new Set(loadCells()));
@@ -76,12 +112,17 @@ export default function App() {
   );
   const [sheetPlace, setSheetPlace] = useState<PlaceResult | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [openNote, setOpenNote] = useState<PlaceNote | null>(null);
+  // Where we last saw the user, for the puck to stand while GPS is still
+  // locking on. Never overwrites a live fix — see puckAt below.
+  const [lastKnown, setLastKnown] = useState<LngLat | null>(null);
   const [placesOpen, setPlacesOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [onboarded, setOnboarded] = useState(() => getKV("onboarded") === "1");
   const [auto, setAuto] = useState(false);
   const [follow, setFollow] = useState(true);
   const cameraRef = useRef<CameraRef>(null);
+  const mapRef = useRef<MapRef>(null);
   const mapWrapRef = useRef<View>(null);
 
   // Background exploring is inherent, not a mode: (re)arm it on every
@@ -102,10 +143,9 @@ export default function App() {
           accuracy: Location.Accuracy.Balanced,
         }));
       if (fix) {
-        cameraRef.current?.jumpTo({
-          center: [fix.coords.longitude, fix.coords.latitude],
-          zoom: 16,
-        });
+        const at: LngLat = [fix.coords.longitude, fix.coords.latitude];
+        setLastKnown(at);
+        cameraRef.current?.jumpTo({ center: at, zoom: 16 });
       }
     } catch {
       // No fix available (e.g. simulator with location unset) — stay put.
@@ -182,14 +222,18 @@ export default function App() {
     if (position) pts.push(position);
     return pts;
   }, [trail, position]);
-  const fogShape = useMemo(
-    () => buildFogShape(unionMasks(baseMask, circlesUnion(livePoints))),
+  const revealMask = useMemo(
+    () => unionMasks(baseMask, circlesUnion(livePoints)),
     [baseMask, livePoints],
   );
-  const rimShape = useMemo(
-    () =>
-      buildFogShape(unionMasks(rimBaseMask, circlesUnion(livePoints, 0.84))),
+  const rimMask = useMemo(
+    () => unionMasks(rimBaseMask, circlesUnion(livePoints, 0.84)),
     [rimBaseMask, livePoints],
+  );
+  const fogShape = useMemo(() => buildFogShape(revealMask), [revealMask]);
+  const rimShape = useMemo(
+    () => buildRimShape(revealMask, rimMask),
+    [revealMask, rimMask],
   );
   const stats = useMemo(() => exploredStats(cells), [cells]);
 
@@ -212,23 +256,29 @@ export default function App() {
       type: "FeatureCollection",
       features: notes.map((n) => ({
         type: "Feature",
-        properties: { name: n.name, verdict: n.verdict },
+        // id rides along so a tapped pin can be traced back to its note.
+        properties: { id: n.id, name: n.name, verdict: n.verdict },
         geometry: { type: "Point", coordinates: [n.lng, n.lat] },
       })),
     }),
     [notes],
   );
 
+  // Until the first fix lands the puck stands on the last place we saw the
+  // user, dimmed. Rendering nothing at all is indistinguishable from a broken
+  // app: the map just sits there with no character on it and no explanation.
+  const puckAt = position ?? lastKnown;
+  const puckStale = !position && !!lastKnown;
   const puckShape = useMemo<Feature<Point> | null>(
     () =>
-      position
+      puckAt
         ? {
             type: "Feature",
             properties: {},
-            geometry: { type: "Point", coordinates: position },
+            geometry: { type: "Point", coordinates: puckAt },
           }
         : null,
-    [position],
+    [puckAt],
   );
 
   const handleLongPress = async (event: NativeSyntheticEvent<PressEvent>) => {
@@ -237,6 +287,45 @@ export default function App() {
     setSheetOpen(true);
     const place = await reversePlace(lat, lng);
     setSheetPlace(place ?? { name: "Dropped pin", detail: "", lat, lng });
+  };
+
+  // A tap resolves against your own saved pins first, the base map's POI pins
+  // second. Both hit-tests hang off this one handler rather than a
+  // GeoJSONSource `onPress`, so the priority between them is explicit and
+  // there is no propagation race between the source and the map.
+  const handleMapPress = async (event: NativeSyntheticEvent<PressEvent>) => {
+    const [x, y] = event.nativeEvent.point;
+    const box: PixelPointBounds = [
+      [x - TAP_SLOP_PX, y - TAP_SLOP_PX],
+      [x + TAP_SLOP_PX, y + TAP_SLOP_PX],
+    ];
+
+    const mine = await mapRef.current?.queryRenderedFeatures(box, {
+      layers: ["note-pins"],
+    });
+    const noteId = mine?.[0]?.properties?.id;
+    const note = notes.find((n) => n.id === noteId);
+    if (note) {
+      setOpenNote(note);
+      return;
+    }
+
+    const pois = await mapRef.current?.queryRenderedFeatures(box, {
+      layers: ["explora-poi"],
+    });
+    const poi = pois?.[0];
+    if (!poi || poi.geometry.type !== "Point") return;
+    const [lng, lat] = poi.geometry.coordinates;
+    setSheetPlace({
+      name:
+        typeof poi.properties?.name === "string"
+          ? poi.properties.name
+          : "Unnamed place",
+      detail: poiDetail(poi.properties?.class),
+      lat,
+      lng,
+    });
+    setSheetOpen(true);
   };
 
   const handleSaveNote = (
@@ -313,8 +402,10 @@ export default function App() {
     <View style={styles.container}>
       <View ref={mapWrapRef} collapsable={false} style={styles.map}>
         <MapView
+          ref={mapRef}
           style={styles.map}
           mapStyle={MAP_STYLE}
+          onPress={handleMapPress}
           onLongPress={handleLongPress}
           onRegionWillChange={handleRegionWillChange}
         >
@@ -377,6 +468,7 @@ export default function App() {
                   "icon-allow-overlap": true,
                   "icon-ignore-placement": true,
                 }}
+                paint={{ "icon-opacity": puckStale ? 0.45 : 1 }}
               />
             </GeoJSONSource>
           )}
@@ -392,7 +484,9 @@ export default function App() {
         <Text style={styles.hudHint}>
           {denied
             ? "Explora needs location to clear the fog — enable it in Settings"
-            : "the fog is waiting… · tap here for your journal"}
+            : !position
+              ? "finding you… · the fog clears once GPS locks on"
+              : "the fog is waiting… · tap here for your journal"}
         </Text>
       </Pressable>
 
@@ -432,6 +526,15 @@ export default function App() {
           setSheetOpen(false);
           setSheetPlace(null);
         }}
+      />
+      <NoteCard
+        note={openNote}
+        onDelete={(id) => {
+          deleteNote(id);
+          setNotes(listNotes());
+          setOpenNote(null);
+        }}
+        onClose={() => setOpenNote(null)}
       />
       <PlacesModal
         visible={placesOpen}

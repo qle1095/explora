@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
-import type { Feature, Polygon } from "geojson";
+import type { Feature, MultiPolygon, Polygon } from "geojson";
 
 interface Props {
   fogShape: Feature<Polygon>;
-  rimShape: Feature<Polygon>;
+  rimShape: Feature<MultiPolygon>;
 }
 
 // fill-translate shifts the whole fog geometry, not just the texture —
 // so the motion must stay tiny: a slow floating sway, never a scroll.
 const SWAY_X_PX = 5;
 const SWAY_Y_PX = 3.5;
+
+/**
+ * How much of the map the mist hides. clouds.png has no alpha channel, so
+ * this is the only thing making the fog translucent — unexplored ground
+ * must stay readable (you can see where to go; you still have to go there).
+ * Tune here, not by stacking extra layers underneath.
+ */
+const MIST_OPACITY = 0.5;
 
 /**
  * The fog layers, with the cloud pattern drifting slowly like weather.
@@ -39,7 +47,9 @@ export function FogOverlay({ fogShape, rimShape }: Props) {
           id="fog-rim-fill"
           paint={{
             "fill-color": "#e9f2ee",
-            "fill-opacity": 0.9,
+            // Only a thin halo on the cleared side of the edge, so it reads
+            // as mist thinning out rather than an outline.
+            "fill-opacity": 0.5,
           }}
         />
       </GeoJSONSource>
@@ -49,8 +59,7 @@ export function FogOverlay({ fogShape, rimShape }: Props) {
           id="fog-fill"
           paint={{
             "fill-pattern": "clouds",
-            // Misty, not opaque: big shapes ghost through, details don't.
-            "fill-opacity": 0.82,
+            "fill-opacity": MIST_OPACITY,
             "fill-translate": drift,
             "fill-translate-anchor": "viewport",
           }}
