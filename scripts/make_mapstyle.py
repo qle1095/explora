@@ -5,6 +5,11 @@ import subprocess
 
 SRC = "https://tiles.openfreemap.org/styles/liberty"
 
+# Every label on the map, in English where OSM has one. The planet tiles carry
+# name:en, name:latin and name:nonlatin on each of place/poi/transportation_name
+# (verified against the TileJSON), so this coalesce always lands somewhere.
+LABEL_EN = ["coalesce", ["get", "name:en"], ["get", "name:latin"], ["get", "name"]]
+
 # kawaii palette
 PAPER = "#f9f0d8"
 WATER = "#7ccfee"
@@ -118,6 +123,13 @@ for layer in style["layers"]:
         paint["text-color"] = TEXT
         paint["text-halo-color"] = HALO
         paint["text-halo-width"] = 1.4
+        # Liberty ships `case has(name:nonlatin) -> concat(name:latin, name:nonlatin)`,
+        # which renders Tokyo twice over — and consults `name_en` only in the
+        # branch that never fires there. Explora answers "where have you been",
+        # so a traveler has to be able to read the map of a place they don't
+        # live in. English name, else a transliteration, else the local name.
+        if (layer.get("layout") or {}).get("text-field") is not None:
+            layer["layout"]["text-field"] = LABEL_EN
 
 # Curated POIs: only food & attractions, with our cute pin badges.
 # Everything else (random shops, services) stays hidden.
@@ -146,7 +158,7 @@ style["layers"].append({
         ],
         "icon-size": ["interpolate", ["linear"], ["zoom"], 14, 0.3, 17, 0.48],
         "icon-anchor": "bottom",
-        "text-field": ["get", "name"],
+        "text-field": LABEL_EN,
         "text-font": ["Noto Sans Italic"],
         "text-size": 10.5,
         "text-anchor": "top",

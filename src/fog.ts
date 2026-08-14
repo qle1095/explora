@@ -64,18 +64,20 @@ function circle(lng: number, lat: number, scale = 1, steps = 36): ClipMultiPolyg
   return [[ring]];
 }
 
+/** Distance in metres (equirectangular — exact enough at city scale). */
+export function metersBetween(a: LngLat, b: LngLat): number {
+  return Math.hypot(
+    (b[1] - a[1]) * 111_320,
+    (b[0] - a[0]) * 111_320 * Math.cos((b[1] * Math.PI) / 180),
+  );
+}
+
 /** Drop points closer than minDistM to the previously kept one. */
 export function thinPoints(points: LngLat[], minDistM = 30): LngLat[] {
   const kept: LngLat[] = [];
   for (const p of points) {
     const last = kept[kept.length - 1];
-    if (
-      !last ||
-      Math.hypot(
-        (p[1] - last[1]) * 111_320,
-        (p[0] - last[0]) * 111_320 * Math.cos((p[1] * Math.PI) / 180),
-      ) >= minDistM
-    ) {
+    if (!last || metersBetween(last, p) >= minDistM) {
       kept.push(p);
     }
   }

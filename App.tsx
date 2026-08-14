@@ -30,6 +30,7 @@ import {
   buildRevealMask,
   buildRimShape,
   exploredStats,
+  metersBetween,
   thinPoints,
   unionMasks,
   circlesUnion,
@@ -57,7 +58,7 @@ import {
   startBackgroundTracking,
   stopBackgroundTracking,
 } from "./src/backgroundLocation";
-import { reversePlace, type PlaceResult } from "./src/places";
+import { areaLabel, reversePlace, type PlaceResult } from "./src/places";
 import { NoteSheet } from "./src/ui/NoteSheet";
 import { PlacesModal } from "./src/ui/PlacesModal";
 import { StatsModal } from "./src/ui/StatsModal";
@@ -70,6 +71,11 @@ import { card, colors, font } from "./src/ui/theme";
 // Storybook recolor of OpenFreeMap liberty (regenerate: scripts/make_mapstyle.py)
 const MAP_STYLE = require("./assets/mapstyle.json");
 const START_CENTER: [number, number] = [-122.4193, 37.7893];
+
+// How far you have to move before we ask Nominatim where you are again.
+// Their policy is 1 req/s and no bulk use, so this can never key off raw
+// fixes — at walking pace 400m is a lookup every few minutes.
+const AREA_REFRESH_M = 400;
 
 // A tap is queried as a box, not a point: the note pins are 6px circles and
 // nobody can hit those. 22 matches the 44px hitbox MapLibre uses for sources.
@@ -116,6 +122,11 @@ export default function App() {
   // Where we last saw the user, for the puck to stand while GPS is still
   // locking on. Never overwrites a live fix — see puckAt below.
   const [lastKnown, setLastKnown] = useState<LngLat | null>(null);
+  // Persisted so the banner names your area the instant the app opens,
+  // before the first fix resolves — and while offline, where it never will.
+  const [area, setArea] = useState<string | null>(() => getKV("area"));
+  const areaAnchor = useRef<LngLat | null>(null);
+  const areaReq = useRef(0);
   const [placesOpen, setPlacesOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [onboarded, setOnboarded] = useState(() => getKV("onboarded") === "1");
@@ -383,6 +394,34 @@ export default function App() {
     }
   }, [follow, position]);
 
+  // Name the area you're in, re-asking only once you've actually moved out of
+  // the last one. A failed lookup (offline, or nothing mapped there) leaves
+  // the previous name up rather than blanking the banner.
+  //
+  // Deliberately no cleanup function: `position` changes on every fix, so a
+  // cleanup would cancel the in-flight lookup a second after starting it, and
+  // the anchor below would then suppress every retry. A request counter drops
+  // stale replies instead — only a *newer* lookup invalidates an older one.
+  useEffect(() => {
+    const at = position ?? lastKnown;
+    if (!at) return;
+    const anchor = areaAnchor.current;
+    if (anchor && metersBetween(anchor, at) < AREA_REFRESH_M) return;
+    areaAnchor.current = at;
+
+    const req = ++areaReq.current;
+    void areaLabel(at[1], at[0])
+      .then((label) => {
+        if (req !== areaReq.current || !label) return;
+        const text = label.city ? `${label.area}, ${label.city}` : label.area;
+        setArea(text);
+        setKV("area", text);
+      })
+      .catch(() => {
+        // Offline or Nominatim hiccup — keep whatever name is already up.
+      });
+  }, [position, lastKnown]);
+
   const handleRegionWillChange = (
     event: NativeSyntheticEvent<ViewStateChangeEvent>,
   ) => {
@@ -476,11 +515,14 @@ export default function App() {
       </View>
 
       <Pressable style={styles.hud} onPress={() => setStatsOpen(true)}>
-        <Text style={styles.hudTitle}>Explora</Text>
-        <Text style={styles.hudStat}>
-          You've uncovered {stats.areaKm2.toFixed(1)} km² of the world ·{" "}
-          {stats.count.toLocaleString()} patches
-        </Text>
+        {area ? (
+          <>
+            <Text style={styles.hudEyebrow}>You are exploring</Text>
+            <Text style={styles.hudArea}>{area}</Text>
+          </>
+        ) : (
+          <Text style={styles.hudArea}>Explora</Text>
+        )}
         <Text style={styles.hudHint}>
           {denied
             ? "Explora needs location to clear the fog — enable it in Settings"
@@ -539,6 +581,7 @@ export default function App() {
       <PlacesModal
         visible={placesOpen}
         notes={notes}
+        near={position ?? lastKnown ?? undefined}
         onSelect={flyToNote}
         onDelete={(id) => {
           deleteNote(id);
@@ -579,16 +622,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
   },
-  hudTitle: {
+  hudEyebrow: {
+    color: colors.textSecondary,
+    fontFamily: font.medium,
+    fontSize: 12.5,
+    letterSpacing: 0.3,
+  },
+  hudArea: {
     color: colors.accentDeep,
     fontFamily: font.bold,
-    fontSize: 15,
-  },
-  hudStat: {
-    color: colors.textPrimary,
-    fontFamily: font.demi,
-    fontSize: 13.5,
-    marginTop: 2,
+    fontSize: 22,
+    marginTop: 1,
   },
   hudHint: {
     color: colors.textFaint,

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   FlatList,
   Pressable,
@@ -7,11 +8,15 @@ import {
 } from "react-native";
 
 import type { PlaceNote } from "../db";
-import { card, colors, font } from "./theme";
+import { metersBetween, type LngLat } from "../fog";
+import { bearingLabel, distanceLabel } from "../places";
+import { card, colors, font, space, type } from "./theme";
 
 interface Props {
   visible: boolean;
   notes: PlaceNote[];
+  /** Where the user is, for distance-sorting. Absent = newest first. */
+  near?: LngLat;
   onSelect: (note: PlaceNote) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
@@ -20,10 +25,31 @@ interface Props {
 export function PlacesModal({
   visible,
   notes,
+  near,
   onSelect,
   onDelete,
   onClose,
 }: Props) {
+  /**
+   * Nearest first. A saved place two streets away and one on another
+   * continent are not equally useful when you're standing somewhere — and
+   * an imported guide is worthless if you can't see which of it is reachable
+   * right now. Without a fix we can't rank, so newest-first is the honest
+   * fallback rather than an arbitrary order.
+   */
+  const rows = useMemo<
+    { note: PlaceNote; distM?: number; bearing?: string }[]
+  >(() => {
+    if (!near) return notes.map((note) => ({ note }));
+    return notes
+      .map((note) => ({
+        note,
+        distM: metersBetween(near, [note.lng, note.lat]),
+        bearing: bearingLabel(near[1], near[0], note.lat, note.lng),
+      }))
+      .sort((a, b) => a.distM - b.distM);
+  }, [notes, near]);
+
   if (!visible) return null;
 
   return (
@@ -39,24 +65,32 @@ export function PlacesModal({
           </Text>
         ) : (
           <FlatList
-            data={notes}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => (
+            data={rows}
+            keyExtractor={(row) => String(row.note.id)}
+            renderItem={({ item: row }) => (
               <View style={styles.row}>
-                <Pressable style={styles.rowMain} onPress={() => onSelect(item)}>
+                <Pressable
+                  style={styles.rowMain}
+                  onPress={() => onSelect(row.note)}
+                >
                   <Text style={styles.name}>
-                    {item.verdict === 1 ? "👍 " : "👎 "}
-                    {item.name}
+                    {row.note.verdict === 1 ? "👍 " : "👎 "}
+                    {row.note.name}
                   </Text>
-                  {!!item.body && (
+                  {row.distM != null && (
+                    <Text style={styles.meta}>
+                      {distanceLabel(row.distM)} {row.bearing}
+                    </Text>
+                  )}
+                  {!!row.note.body && (
                     <Text style={styles.body} numberOfLines={2}>
-                      {item.body}
+                      {row.note.body}
                     </Text>
                   )}
                 </Pressable>
                 <Pressable
                   style={styles.delete}
-                  onPress={() => onDelete(item.id)}
+                  onPress={() => onDelete(row.note.id)}
                   hitSlop={8}
                 >
                   <Text style={styles.deleteText}>✕</Text>
@@ -113,6 +147,9 @@ const styles = StyleSheet.create({
   },
   rowMain: { flex: 1, paddingVertical: 12 },
   name: { color: colors.textPrimary, fontSize: 15, fontFamily: font.demi },
+  // Same role as the check-in list's meta line, so the two screens read as
+  // one system rather than two lists that happen to show places.
+  meta: { ...type.meta, color: colors.textFaint, marginTop: space.xs / 2 },
   body: {
     color: colors.textSecondary,
     fontSize: 13,

@@ -46,6 +46,13 @@ db.execSync(`
     lng REAL NOT NULL,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS nearby_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    payload TEXT NOT NULL
+  );
 `);
 
 // Migration: verdict column added after M1 databases already existed.
@@ -197,6 +204,58 @@ export function setKV(key: string, value: string): void {
 }
 
 /** Distinct local days (YYYY-MM-DD, ascending) on which new fog was cleared. */
+/** How many lookups we keep. A traveler's whole trip fits comfortably. */
+const NEARBY_CACHE_LIMIT = 200;
+
+export function cacheNearby(lat: number, lng: number, payload: string): void {
+  db.runSync(
+    "INSERT INTO nearby_cache (lat, lng, fetched_at, payload) VALUES (?, ?, ?, ?)",
+    [lat, lng, Date.now(), payload],
+  );
+  db.runSync(
+    `DELETE FROM nearby_cache WHERE id NOT IN
+       (SELECT id FROM nearby_cache ORDER BY fetched_at DESC LIMIT ?)`,
+    [NEARBY_CACHE_LIMIT],
+  );
+}
+
+/**
+ * The most recent cached lookup taken within `maxDistM` of a point. Used only
+ * when the live lookup fails — a traveler underground or on a foreign SIM
+ * should still see what was around them, not an error.
+ */
+export function findCachedNearby(
+  lat: number,
+  lng: number,
+  maxDistM: number,
+): { payload: string; fetchedAt: number } | null {
+  // Degrees of latitude are constant; longitude shrinks toward the poles.
+  const dLat = maxDistM / 111_320;
+  const dLng = maxDistM / (111_320 * Math.cos((lat * Math.PI) / 180) || 1);
+  const rows = db.getAllSync<{
+    lat: number;
+    lng: number;
+    payload: string;
+    fetched_at: number;
+  }>(
+    `SELECT lat, lng, payload, fetched_at FROM nearby_cache
+      WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+      ORDER BY fetched_at DESC LIMIT 20`,
+    [lat - dLat, lat + dLat, lng - dLng, lng + dLng],
+  );
+  for (const row of rows) {
+    const dist = Math.hypot(
+      (row.lat - lat) * 111_320,
+      (row.lng - lng) * 111_320 * Math.cos((lat * Math.PI) / 180),
+    );
+    // The box is a square; this trims its corners to a real radius.
+    if (dist <= maxDistM) {
+      return { payload: row.payload, fetchedAt: row.fetched_at };
+    }
+  }
+  return null;
+}
+
 export function exploredDays(): string[] {
   return db
     .getAllSync<{ day: string }>(

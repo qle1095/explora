@@ -32,12 +32,22 @@ export function useTracking(onCells: (cells: string[]) => void) {
       setTrail([...points.current]);
 
       const cell = latLngToCell(latitude, longitude, REVEAL_RES);
-      const fresh =
-        lastCell.current && lastCell.current !== cell
-          ? gridPathCells(lastCell.current, cell)
-          : lastCell.current === cell
-            ? []
-            : [cell];
+      let fresh: string[];
+      if (!lastCell.current) {
+        fresh = [cell];
+      } else if (lastCell.current === cell) {
+        fresh = [];
+      } else {
+        try {
+          fresh = gridPathCells(lastCell.current, cell);
+        } catch {
+          // h3 refuses to path between distant cells, so a flight or a GPS
+          // jump throws here. Record where we actually are instead: letting
+          // this escape would skip the `lastCell` update below and wedge
+          // every later fix against a cell on the far side of the planet.
+          fresh = [cell];
+        }
+      }
       lastCell.current = cell;
       if (fresh.length) {
         saveCells(fresh);
